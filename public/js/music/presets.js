@@ -1,0 +1,820 @@
+/***********************************************************************
+ * 1. HARMONIC KEY/SCALE TRANSPOSITION, NON-LINEAR BPM & 90 PRESETS
+ ***********************************************************************/
+const KEY_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+
+// Chromatic degree mapping from source C-Dorian semitone (0..11) to target Scale/Mode
+// Source C Dorian degrees: C(0), D(2), Eb(3), F(5), G(7), A(9), Bb(10)
+const SCALE_DEFINITIONS = {
+    dorian: {
+        label: 'DORIAN',
+        // 0:C, 1:C#, 2:D, 3:Eb, 4:E, 5:F, 6:F#, 7:G, 8:Ab, 9:A, 10:Bb, 11:B
+        chromaMap: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    },
+    minor: {
+        label: 'NATURAL MINOR',
+        // 6th degree A(9) lowers to Ab(8)
+        chromaMap: [0, 1, 2, 3, 4, 5, 6, 7, 8, 8, 10, 11]
+    },
+    major: {
+        label: 'MAJOR',
+        // 3rd degree Eb(3)->E(4), 6th A(9)->A(9), 7th Bb(10)->B(11)
+        chromaMap: [0, 1, 2, 4, 4, 5, 6, 7, 9, 9, 11, 11]
+    },
+    harmonicMinor: {
+        label: 'HARMONIC MINOR',
+        // 6th A(9)->Ab(8), 7th Bb(10)->B(11)
+        chromaMap: [0, 1, 2, 3, 4, 5, 6, 7, 8, 8, 11, 11]
+    },
+    phrygian: {
+        label: 'PHRYGIAN',
+        // 2nd D(2)->Db(1), 6th A(9)->Ab(8)
+        chromaMap: [0, 1, 1, 3, 4, 5, 6, 7, 8, 8, 10, 11]
+    },
+    lydian: {
+        label: 'LYDIAN',
+        // 3rd Eb(3)->E(4), 4th F(5)->F#(6), 7th Bb(10)->B(11)
+        chromaMap: [0, 1, 2, 4, 4, 6, 6, 7, 9, 9, 11, 11]
+    },
+    mixolydian: {
+        label: 'MIXOLYDIAN',
+        // 3rd Eb(3)->E(4), 6th A(9)->A(9), 7th stays Bb(10)
+        chromaMap: [0, 1, 2, 4, 4, 5, 6, 7, 9, 9, 10, 11]
+    }
+};
+
+/**
+ * Piecewise Non-Linear Slider Mapping (Slider 0..1000 <-> BPM 1..2400)
+ * - [0 .. 200]    -> 1 BPM to 70 BPM (Ultra-slow ambient / halftime)
+ * - [200 .. 800]  -> 70 BPM to 150 BPM (60% of slider travel dedicated to standard musical tempos!)
+ * - [800 .. 930]  -> 150 BPM to 400 BPM (DnB, Speedcore, Fast Chiptune)
+ * - [930 .. 1000] -> 400 BPM to 2400 BPM (Hyper-speed audio-rate / computational limit)
+ */
+function sliderToBpm(sliderVal) {
+    const s = Math.max(0, Math.min(1000, Number(sliderVal)));
+    if (s <= 200) {
+        return Math.max(1, Math.round(1 + (s / 200) * 69));
+    } else if (s <= 800) {
+        return Math.round(70 + ((s - 200) / 600) * 80);
+    } else if (s <= 930) {
+        const t = (s - 800) / 130;
+        return Math.round(150 + Math.pow(t, 1.35) * 250);
+    } else {
+        const t = (s - 930) / 70;
+        return Math.round(400 + Math.pow(t, 2.1) * 2000);
+    }
+}
+
+function bpmToSlider(bpmVal) {
+    const b = Math.max(1, Math.min(2400, Number(bpmVal)));
+    if (b <= 70) {
+        return Math.round(((b - 1) / 69) * 200);
+    } else if (b <= 150) {
+        return Math.round(200 + ((b - 70) / 80) * 600);
+    } else if (b <= 400) {
+        const t = Math.pow((b - 150) / 250, 1 / 1.35);
+        return Math.round(800 + t * 130);
+    } else {
+        const t = Math.pow((b - 400) / 2000, 1 / 2.1);
+        return Math.round(930 + t * 70);
+    }
+}
+
+/**
+ * Converts a C-Dorian MIDI note into its transposed & modal-mapped frequency
+ */
+function midiToFreq(midi) {
+    const octave = Math.floor(midi / 12);
+    const chroma = ((midi % 12) + 12) % 12;
+    const scaleDef = SCALE_DEFINITIONS[appState?.scaleMode || 'dorian'] || SCALE_DEFINITIONS.dorian;
+    const mappedChroma = scaleDef.chromaMap[chroma];
+
+    let rootShift = Number(appState?.rootKey || 0);
+    // Keep bass & chords centered so shifting to G/A/B doesn't push sub-bass too high
+    if (rootShift > 6) rootShift -= 12;
+
+    const finalMidi = octave * 12 + mappedChroma + rootShift;
+    return 440 * Math.pow(2, (finalMidi - 69) / 12);
+}
+
+// Rich 3-formant resonant frequencies + bandwidths for expressive diphthong morphing
+const VOWEL_FORMANTS = {
+    A: { f: [780, 1180, 2850], q: [7.5, 9.0, 11.0], open: 1.0 },
+    E: { f: [430, 1850, 2650], q: [8.0, 10.0, 11.0], open: 0.72 },
+    I: { f: [300, 2320, 3000], q: [9.0, 11.0, 12.0], open: 0.45 },
+    O: { f: [460, 820,  2750], q: [8.0, 9.5, 11.0], open: 0.88 },
+    U: { f: [330, 680,  2600], q: [9.0, 10.0, 11.0], open: 0.55 }
+};
+
+const CATEGORY_META = {
+    drums:   { name: 'Drums',   color: '#f59e0b', hex: 0xf59e0b, textClass: 'text-[#f59e0b]', activeClass: 'active-drums' },
+    bass:    { name: 'Bass',    color: '#06b6d4', hex: 0x06b6d4, textClass: 'text-[#06b6d4]', activeClass: 'active-bass' },
+    chords:  { name: 'Chords',  color: '#8b5cf6', hex: 0x8b5cf6, textClass: 'text-[#8b5cf6]', activeClass: 'active-chords' },
+    melody:  { name: 'Melody',  color: '#10b981', hex: 0x10b981, textClass: 'text-[#10b981]', activeClass: 'active-melody' },
+    strings: { name: 'Strings', color: '#ec4899', hex: 0xec4899, textClass: 'text-[#ec4899]', activeClass: 'active-strings' },
+    vocals:  { name: 'Vocals',  color: '#f43f5e', hex: 0xf43f5e, textClass: 'text-[#f43f5e]', activeClass: 'active-vocals' }
+};
+
+const INSTRUMENT_PRESETS = [
+    // ================= DRUMS (16) =================
+    {
+        id: 'drums_boombap', name: 'Boom Bap Kit', shortName: 'Boom Bap', category: 'drums', synthType: 'boombap',
+        steps: ['K', 'H', null, 'H', 'S', null, 'K', 'H', null, 'K', 'H', null, 'S', 'H', null, 'H'],
+        visualHeights: [1.0, 0.35, 0, 0.35, 0.9, 0, 0.85, 0.35, 0, 0.85, 0.35, 0, 0.95, 0.35, 0, 0.4]
+    },
+    {
+        id: 'drums_trap808', name: '808 Pocket Kit', shortName: '808 Pocket', category: 'drums', synthType: 'trap808',
+        steps: ['K', 'H', 'H', 'R', 'S', 'H', null, 'K', 'H', 'R', 'K', 'H', 'S', 'R', 'H', 'R'],
+        visualHeights: [1.0, 0.4, 0.4, 0.75, 0.95, 0.4, 0, 0.9, 0.4, 0.75, 0.9, 0.4, 0.95, 0.8, 0.45, 0.8]
+    },
+    {
+        id: 'drums_breakbeat', name: 'Amen Breakbeat', shortName: 'Breakbeat', category: 'drums', synthType: 'breakbeat',
+        steps: ['K', 'H', 'S', 'H', null, 'S', 'K', 'S', 'H', 'K', 'S', 'H', 'S', null, 'K', 'S'],
+        visualHeights: [1.0, 0.45, 0.85, 0.45, 0, 0.75, 0.95, 0.8, 0.45, 0.9, 0.95, 0.45, 0.9, 0, 0.85, 0.9]
+    },
+    {
+        id: 'drums_taiko', name: 'Toms & Shakers', shortName: 'Studio Toms', category: 'drums', synthType: 'taiko',
+        steps: ['T', 'S', 'M', 'S', 'T', 'S', 'M', 'M', 'T', 'S', 'M', 'S', 'T', 'M', 'S', 'M'],
+        visualHeights: [1.0, 0.35, 0.75, 0.35, 0.95, 0.35, 0.75, 0.8, 1.0, 0.35, 0.75, 0.35, 0.95, 0.8, 0.35, 0.85]
+    },
+    {
+        id: 'drums_synthwave', name: 'Gated Linndrum', shortName: 'Linndrum', category: 'drums', synthType: 'synthwave',
+        steps: ['K', 'H', 'H', 'H', 'G', 'H', 'K', 'H', 'K', 'H', 'K', 'H', 'G', 'H', 'T', 'T'],
+        visualHeights: [1.0, 0.4, 0.4, 0.4, 1.0, 0.4, 0.9, 0.4, 1.0, 0.4, 0.9, 0.4, 1.0, 0.4, 0.85, 0.9]
+    },
+    {
+        id: 'drums_hats', name: 'Funky Hat Groove', shortName: 'Hat Groove', category: 'drums', synthType: 'funkyhats',
+        steps: ['C', 'C', 'O', 'C', 'R', 'C', 'O', 'C', 'C', 'C', 'O', 'C', 'R', 'C', 'O', 'O'],
+        visualHeights: [0.45, 0.4, 0.85, 0.4, 0.7, 0.4, 0.85, 0.4, 0.5, 0.4, 0.85, 0.4, 0.7, 0.45, 0.85, 0.9]
+    },
+    {
+        id: 'drums_afro', name: 'Afro-Cuban Congas', shortName: 'Afro Congas', category: 'drums', synthType: 'afroperc',
+        steps: ['L', 'S', 'H', 'O', 'L', 'S', 'H', null, 'L', 'H', 'O', 'S', 'H', 'L', 'O', 'S'],
+        visualHeights: [0.95, 0.4, 0.75, 0.85, 0.9, 0.4, 0.75, 0, 0.95, 0.75, 0.85, 0.4, 0.8, 0.9, 0.85, 0.45]
+    },
+    {
+        id: 'drums_house909', name: '909 Club Four-Floor', shortName: '909 House', category: 'drums', synthType: 'house909',
+        steps: ['K', 'C', 'O', 'C', 'K', 'C', 'O', 'C', 'K', 'C', 'O', 'C', 'K', 'C', 'O', 'P'],
+        visualHeights: [1.0, 0.4, 0.8, 0.4, 1.0, 0.4, 0.8, 0.4, 1.0, 0.4, 0.8, 0.4, 1.0, 0.4, 0.8, 0.9]
+    },
+    {
+        id: 'drums_dnb', name: 'Liquid DnB Roller', shortName: 'DnB Roller', category: 'drums', synthType: 'breakbeat',
+        steps: ['K', 'H', 'H', null, 'S', 'H', 'H', 'K', 'H', 'S', 'K', 'H', 'S', 'H', 'H', 'H'],
+        visualHeights: [1.0, 0.45, 0.45, 0, 0.95, 0.45, 0.45, 0.85, 0.45, 0.75, 0.9, 0.45, 0.95, 0.45, 0.5, 0.5]
+    },
+    {
+        id: 'drums_ukgarage', name: 'UK Garage 2-Step', shortName: '2-Step Kit', category: 'drums', synthType: 'ukgarage',
+        steps: ['K', 'C', 'O', 'R', 'S', 'C', null, 'K', 'C', 'O', 'K', 'C', 'S', 'R', 'O', 'C'],
+        visualHeights: [1.0, 0.4, 0.75, 0.65, 0.95, 0.4, 0, 0.9, 0.4, 0.75, 0.85, 0.4, 0.95, 0.65, 0.8, 0.45]
+    },
+    {
+        id: 'drums_bossa', name: 'Bossa Nova Rim & Brush', shortName: 'Bossa Kit', category: 'drums', synthType: 'bossa',
+        steps: ['K', 'S', 'R', 'K', 'S', 'R', 'K', 'S', 'K', 'R', 'S', 'K', 'R', 'S', 'K', 'R'],
+        visualHeights: [0.9, 0.4, 0.75, 0.8, 0.4, 0.75, 0.85, 0.4, 0.9, 0.75, 0.4, 0.8, 0.75, 0.4, 0.85, 0.7]
+    },
+    {
+        id: 'drums_reggaeton', name: 'Dembow Stadium Riddim', shortName: 'Dembow Kit', category: 'drums', synthType: 'boombap',
+        steps: ['K', 'H', null, 'S', 'K', 'H', 'S', null, 'K', 'H', null, 'S', 'K', 'H', 'S', 'H'],
+        visualHeights: [1.0, 0.4, 0, 0.9, 0.95, 0.4, 0.9, 0, 1.0, 0.4, 0, 0.9, 0.95, 0.4, 0.95, 0.45]
+    },
+    {
+        id: 'drums_drill', name: 'UK Drill Ghost Hats', shortName: 'Drill Kit', category: 'drums', synthType: 'trap808',
+        steps: ['K', 'H', 'H', 'H', null, 'H', 'S', 'R', 'H', 'K', 'H', 'R', 'S', 'H', 'K', 'R'],
+        visualHeights: [1.0, 0.45, 0.45, 0.5, 0, 0.45, 0.95, 0.8, 0.45, 0.9, 0.45, 0.8, 0.95, 0.45, 0.9, 0.85]
+    },
+    {
+        id: 'drums_techno', name: 'Warehouse Industrial', shortName: 'Techno Kit', category: 'drums', synthType: 'industrial',
+        steps: ['K', 'H', 'M', 'H', 'K', 'G', 'M', 'H', 'K', 'H', 'M', 'H', 'K', 'G', 'M', 'M'],
+        visualHeights: [1.0, 0.45, 0.8, 0.45, 1.0, 0.95, 0.8, 0.45, 1.0, 0.45, 0.8, 0.45, 1.0, 0.95, 0.85, 0.9]
+    },
+    {
+        id: 'drums_jazzbrush', name: 'Late Night Ride Swing', shortName: 'Jazz Swing', category: 'drums', synthType: 'jazzswing', swingAmount: 0.34,
+        steps: ['D', null, 'G', 'S', 'C', null, 'G', 'S', 'D', null, 'G', 'S', 'B', 'R', 'G', 'S'],
+        visualHeights: [0.9, 0, 0.65, 0.82, 0.95, 0, 0.65, 0.82, 0.9, 0, 0.65, 0.82, 0.95, 0.72, 0.7, 0.85]
+    },
+    {
+        id: 'drums_cowbell', name: '808 Phonk Cowbell Perc', shortName: 'Cowbell Perc', category: 'drums', synthType: 'cowbellperc',
+        steps: ['B', 'S', 'H', 'B', 'L', 'S', 'B', 'H', 'B', 'B', 'H', 'S', 'L', 'B', 'H', 'S'],
+        visualHeights: [0.95, 0.4, 0.8, 0.9, 0.75, 0.4, 0.9, 0.8, 0.95, 0.9, 0.8, 0.4, 0.75, 0.95, 0.85, 0.45]
+    },
+    {
+        id: 'drums_junkyard', name: 'Foundry Anvil & Steam Kit', shortName: 'Anvil & Steam', category: 'drums', synthType: 'junkyard',
+        steps: ['B', 'H', 'W', 'S', 'A', 'H', 'B', 'W', 'B', 'W', 'A', 'S', 'A', 'B', 'S', 'W'],
+        visualHeights: [1.0, 0.45, 0.75, 0.65, 1.0, 0.45, 0.9, 0.75, 0.95, 0.75, 1.0, 0.65, 0.95, 0.9, 0.7, 0.8]
+    },
+
+    // ================= BASS (17) =================
+    {
+        id: 'bass_slap', name: 'Slap Funk Bass', shortName: 'Slap Bass', category: 'bass', synthType: 'slapbass',
+        steps: [36, null, 48, 36, null, 39, 41, null, 36, null, 48, 43, null, 46, 48, null],
+        visualHeights: [0.95, 0, 0.9, 0.75, 0, 0.65, 0.75, 0, 0.95, 0, 0.9, 0.8, 0, 0.85, 0.95, 0]
+    },
+    {
+        id: 'bass_acid', name: 'Acid 303 Squelch', shortName: 'Acid 303', category: 'bass', synthType: 'acidbass',
+        steps: [36, 48, 36, 46, 36, null, 39, 41, 36, 48, 43, 46, 48, 36, 46, 43],
+        visualHeights: [0.7, 1.0, 0.65, 0.9, 0.65, 0, 0.75, 0.8, 0.7, 1.0, 0.85, 0.9, 0.95, 0.65, 0.9, 0.8]
+    },
+    {
+        id: 'bass_reese', name: 'Deep Reese Sub', shortName: 'Reese Sub', category: 'bass', synthType: 'reesebass',
+        steps: [36, null, null, null, 39, null, 41, null, 36, null, null, null, 43, null, 46, null],
+        visualHeights: [1.0, 0.7, 0.5, 0, 0.9, 0.6, 0.95, 0, 1.0, 0.7, 0.5, 0, 0.95, 0.6, 0.9, 0]
+    },
+    {
+        id: 'bass_upright', name: 'Upright Jazz Walk', shortName: 'Upright Bass', category: 'bass', synthType: 'upright', swingAmount: 0.30,
+        steps: [36, null, 39, 40, 41, null, 43, 44, 45, null, 43, null, 41, null, 46, 43],
+        visualHeights: [0.85, 0, 0.7, 0.65, 0.75, 0, 0.8, 0.7, 0.9, 0, 0.8, 0, 0.75, 0, 0.95, 0.75]
+    },
+    {
+        id: 'bass_moog', name: 'Analog Moog Pluck', shortName: 'Moog Pluck', category: 'bass', synthType: 'moogbass',
+        steps: [36, 36, 48, 36, 39, 39, 51, 39, 41, 41, 53, 41, 43, 46, 48, 55],
+        visualHeights: [0.9, 0.7, 1.0, 0.7, 0.85, 0.7, 0.95, 0.7, 0.9, 0.7, 1.0, 0.7, 0.85, 0.9, 0.95, 1.0]
+    },
+    {
+        id: 'bass_sub808', name: '808 Glide Bass', shortName: '808 Glide', category: 'bass', synthType: 'sub808',
+        steps: [36, null, null, 36, null, null, 48, 46, 36, null, null, 39, null, 41, 43, null],
+        visualHeights: [1.0, 0.6, 0, 0.95, 0.5, 0, 1.0, 0.9, 1.0, 0.6, 0, 0.85, 0, 0.9, 0.95, 0]
+    },
+    {
+        id: 'bass_donk', name: 'UK Bassline FM Donk', shortName: 'FM Donk', category: 'bass', synthType: 'fmdonk',
+        steps: [null, 36, null, 48, null, 39, null, 46, null, 36, null, 48, 43, null, 46, 48],
+        visualHeights: [0, 0.9, 0, 1.0, 0, 0.85, 0, 0.95, 0, 0.9, 0, 1.0, 0.85, 0, 0.9, 1.0]
+    },
+    {
+        id: 'bass_synthwave', name: 'Outrun Rolling 16ths', shortName: 'Outrun Bass', category: 'bass', synthType: 'moogbass',
+        steps: [36, 36, 36, 48, 36, 36, 36, 48, 34, 34, 34, 46, 33, 33, 34, 39],
+        visualHeights: [0.9, 0.75, 0.75, 1.0, 0.85, 0.75, 0.75, 1.0, 0.9, 0.75, 0.75, 0.95, 0.85, 0.75, 0.85, 0.9]
+    },
+    {
+        id: 'bass_wobble', name: 'Dubstep LFO Wobble', shortName: 'LFO Wobble', category: 'bass', synthType: 'wobblebass',
+        steps: [36, null, 36, 39, null, 41, null, 43, 36, null, 48, 46, 43, null, 39, null],
+        visualHeights: [1.0, 0.6, 0.9, 0.85, 0, 0.9, 0, 0.95, 1.0, 0.6, 1.0, 0.9, 0.85, 0, 0.8, 0]
+    },
+    {
+        id: 'bass_fretless', name: 'Jaco Fretless Glide', shortName: 'Fretless', category: 'bass', synthType: 'fretless',
+        steps: [36, null, 43, 46, 48, null, 46, 43, 41, null, 39, null, 36, 39, 41, 43],
+        visualHeights: [0.9, 0, 0.8, 0.85, 1.0, 0, 0.85, 0.8, 0.75, 0, 0.7, 0, 0.85, 0.75, 0.8, 0.9]
+    },
+    {
+        id: 'bass_disco', name: 'Studio 54 Octave Disco', shortName: 'Disco Octaves', category: 'bass', synthType: 'slapbass',
+        steps: [36, 48, 36, 48, 39, 51, 39, 51, 41, 53, 41, 53, 43, 55, 46, 58],
+        visualHeights: [0.8, 1.0, 0.8, 1.0, 0.8, 1.0, 0.8, 1.0, 0.8, 1.0, 0.8, 1.0, 0.85, 1.0, 0.85, 1.0]
+    },
+    {
+        id: 'bass_tuba', name: 'Brass Sousaphone Line', shortName: 'Sousaphone', category: 'bass', synthType: 'tubabass',
+        steps: [36, null, 43, null, 36, null, 39, 41, 43, null, 36, null, 46, null, 43, null],
+        visualHeights: [1.0, 0, 0.85, 0, 0.95, 0, 0.8, 0.85, 0.9, 0, 0.95, 0, 0.9, 0, 0.85, 0]
+    },
+    {
+        id: 'bass_picked', name: 'P-Bass Muted Pick', shortName: 'Picked Bass', category: 'bass', synthType: 'upright',
+        steps: [36, 36, null, 36, 39, null, 41, 41, 36, 36, null, 43, 46, null, 43, 39],
+        visualHeights: [0.9, 0.75, 0, 0.85, 0.8, 0, 0.85, 0.8, 0.9, 0.75, 0, 0.85, 0.95, 0, 0.85, 0.8]
+    },
+    {
+        id: 'bass_neuro', name: 'Neurofunk Growl Sub', shortName: 'Neuro Growl', category: 'bass', synthType: 'acidbass',
+        steps: [36, null, null, 48, 46, null, 36, null, 39, null, 51, 48, null, 43, 41, 39],
+        visualHeights: [1.0, 0, 0, 0.95, 0.9, 0, 0.95, 0, 0.85, 0, 1.0, 0.9, 0, 0.85, 0.8, 0.75]
+    },
+    {
+        id: 'bass_organped', name: 'Cathedral Sub Pedals', shortName: 'Sub Pedals', category: 'bass', synthType: 'reesebass',
+        steps: [36, null, null, null, null, null, null, null, 34, null, null, null, 39, null, null, null],
+        visualHeights: [1.0, 0.8, 0.65, 0.5, 0.4, 0.3, 0, 0, 0.95, 0.75, 0.6, 0.4, 0.95, 0.75, 0.6, 0.4]
+    },
+    {
+        id: 'bass_didgeridoo', name: 'Outback Didgeridoo Drone', shortName: 'Didgeridoo', category: 'bass', synthType: 'didgeridoo',
+        steps: [36, 36, null, 36, 39, null, 36, 36, 36, null, 39, 36, 41, null, 36, 39],
+        visualHeights: [1.0, 0.85, 0, 0.9, 0.95, 0, 0.85, 0.8, 1.0, 0, 0.95, 0.85, 1.0, 0, 0.85, 0.9]
+    },
+    {
+        id: 'bass_jawharp', name: 'Spring-Steel Jaw Harp Twang', shortName: 'Jaw Harp', category: 'bass', synthType: 'jawharp',
+        steps: [36, 48, 36, 43, 36, 46, 39, 48, 36, 48, 41, 43, 46, 36, 43, 48],
+        visualHeights: [0.95, 0.85, 0.75, 0.85, 0.8, 0.9, 0.85, 0.95, 0.95, 0.85, 0.8, 0.85, 0.9, 0.75, 0.85, 0.95]
+    },
+
+    // ================= CHORDS (17) =================
+    {
+        id: 'chords_rhodes', name: 'Rhodes Stage EP', shortName: 'Rhodes EP', category: 'chords', synthType: 'rhodes',
+        steps: [
+            [60, 63, 67, 70, 74], null, null, [60, 63, 67, 70],
+            null, null, [57, 60, 65, 69], null,
+            [58, 62, 65, 69], null, null, null,
+            [60, 63, 67, 70], null, [62, 65, 69, 72], null
+        ],
+        visualHeights: [0.95, 0, 0, 0.75, 0, 0, 0.9, 0, 0.85, 0, 0, 0, 0.8, 0, 0.9, 0]
+    },
+    {
+        id: 'chords_guitar', name: 'Acoustic Strum', shortName: 'Guitar Strum', category: 'chords', synthType: 'guitarstrum',
+        steps: [
+            [60, 63, 67, 72], null, [60, 63, 67], [60, 63, 67, 72],
+            null, [60, 63, 67], null, [60, 63, 67],
+            [58, 62, 65, 70], null, [58, 62, 65], [57, 60, 65, 69],
+            null, [57, 60, 65], [58, 62, 67], null
+        ],
+        visualHeights: [0.9, 0, 0.55, 0.8, 0, 0.55, 0, 0.6, 0.9, 0, 0.55, 0.85, 0, 0.55, 0.75, 0]
+    },
+    {
+        id: 'chords_juno', name: 'Juno Poly Synth', shortName: 'Juno Keys', category: 'chords', synthType: 'brass',
+        steps: [
+            [60, 63, 67, 70], null, null, [62, 65, 69],
+            null, [63, 67, 70], null, null,
+            null, null, [60, 63, 67, 72], null,
+            [58, 62, 65, 70], null, [60, 63, 67], null
+        ],
+        visualHeights: [0.95, 0, 0, 0.85, 0, 0.9, 0, 0, 0, 0, 0.95, 0, 0.85, 0, 0.8, 0]
+    },
+    {
+        id: 'chords_arp', name: 'Crystal Pluck Arp', shortName: 'Pluck Arp', category: 'chords', synthType: 'cyberarp',
+        steps: [
+            [60, 72], [63], [67], [70],
+            [72], [70], [67], [63],
+            [58, 70], [62], [65], [69],
+            [70], [69], [65], [62]
+        ],
+        visualHeights: [0.9, 0.65, 0.75, 0.85, 1.0, 0.85, 0.75, 0.65, 0.9, 0.65, 0.75, 0.85, 0.95, 0.85, 0.75, 0.65]
+    },
+    {
+        id: 'chords_wurli', name: 'Wurlitzer Tremolo', shortName: 'Wurlitzer', category: 'chords', synthType: 'wurlitzer',
+        steps: [
+            [60, 63, 67, 70], null, [60, 63, 67], null,
+            [58, 62, 65, 69], null, null, [58, 62, 65],
+            [57, 60, 65, 69], null, [57, 60, 65], null,
+            [55, 58, 62, 67], null, [58, 62, 65, 70], null
+        ],
+        visualHeights: [0.95, 0, 0.7, 0, 0.9, 0, 0, 0.7, 0.95, 0, 0.7, 0, 0.85, 0, 0.9, 0]
+    },
+    {
+        id: 'chords_clav', name: 'Funky Clavinet', shortName: 'Clavinet', category: 'chords', synthType: 'clavinet',
+        steps: [
+            [60, 67], [63], null, [60, 70],
+            null, [67], [63, 70], null,
+            [58, 65], null, [62, 69], [60, 67],
+            null, [63], [65, 72], [67]
+        ],
+        visualHeights: [0.9, 0.65, 0, 0.85, 0, 0.7, 0.9, 0, 0.85, 0, 0.85, 0.9, 0, 0.65, 0.95, 0.75]
+    },
+    {
+        id: 'chords_grand', name: 'Steinway Concert Grand', shortName: 'Grand Piano', category: 'chords', synthType: 'grandpiano',
+        steps: [
+            [60, 63, 67, 72], null, [67, 70], null,
+            [58, 62, 65, 70], null, [65, 69], null,
+            [57, 60, 65, 69], null, [60, 65, 72], null,
+            [55, 58, 62, 67], null, [58, 62, 67, 70], null
+        ],
+        visualHeights: [1.0, 0, 0.75, 0, 0.95, 0, 0.75, 0, 0.95, 0, 0.85, 0, 0.9, 0, 0.9, 0]
+    },
+    {
+        id: 'chords_b3organ', name: 'Hammond B3 Rotary', shortName: 'B3 Organ', category: 'chords', synthType: 'b3organ',
+        steps: [
+            [60, 63, 67, 70], null, [60, 63, 67], [62, 65, 69],
+            null, null, [63, 67, 70, 74], null,
+            [60, 63, 67, 72], null, [58, 62, 65, 70], null,
+            [57, 60, 65, 69], null, [58, 62, 65], null
+        ],
+        visualHeights: [0.95, 0, 0.75, 0.85, 0, 0, 1.0, 0, 0.95, 0, 0.9, 0, 0.85, 0, 0.75, 0]
+    },
+    {
+        id: 'chords_dx7', name: '80s DX7 E-Piano Tines', shortName: 'DX7 Tines', category: 'chords', synthType: 'rhodes',
+        steps: [
+            [60, 67, 74], null, [63, 70], null,
+            [58, 65, 72], null, null, [62, 69],
+            [56, 63, 70], null, [60, 67], null,
+            [58, 65, 69], null, [62, 69, 74], null
+        ],
+        visualHeights: [0.95, 0, 0.8, 0, 0.95, 0, 0, 0.8, 0.9, 0, 0.8, 0, 0.85, 0, 1.0, 0]
+    },
+    {
+        id: 'chords_ukulele', name: 'Island Ukulele Skank', shortName: 'Ukulele', category: 'chords', synthType: 'guitarstrum',
+        steps: [
+            null, [67, 72, 75, 79], null, [67, 72, 75],
+            null, [65, 70, 74, 77], null, [65, 70, 74],
+            null, [65, 69, 72, 77], null, [65, 69, 72],
+            null, [67, 70, 74, 79], null, [67, 70, 74]
+        ],
+        visualHeights: [0, 0.9, 0, 0.75, 0, 0.9, 0, 0.75, 0, 0.9, 0, 0.75, 0, 0.95, 0, 0.8]
+    },
+    {
+        id: 'chords_harpsichord', name: 'Baroque Harpsichord', shortName: 'Harpsichord', category: 'chords', synthType: 'clavinet',
+        steps: [
+            [60, 67, 72], [63], [67], [72],
+            [58, 65, 70], [62], [65], [70],
+            [57, 65, 69], [60], [65], [69],
+            [55, 62, 67], [58], [62], [67]
+        ],
+        visualHeights: [0.95, 0.7, 0.75, 0.85, 0.95, 0.7, 0.75, 0.85, 0.9, 0.7, 0.75, 0.85, 0.9, 0.7, 0.75, 0.85]
+    },
+    {
+        id: 'chords_dubtechno', name: 'Dub Delay Minor Stabs', shortName: 'Dub Stabs', category: 'chords', synthType: 'dubchord',
+        steps: [
+            null, null, [60, 63, 67, 70], null,
+            null, [60, 63, 67], null, null,
+            null, null, [58, 62, 65, 69], null,
+            [60, 63, 67, 72], null, null, [58, 62, 65]
+        ],
+        visualHeights: [0, 0, 1.0, 0.6, 0, 0.85, 0.45, 0, 0, 0, 0.95, 0.55, 0.9, 0.45, 0, 0.8]
+    },
+    {
+        id: 'chords_supersaw', name: 'Festival Supersaw Wall', shortName: 'Supersaw', category: 'chords', synthType: 'brass',
+        steps: [
+            [60, 63, 67, 72, 75], null, [60, 63, 67, 72], [60, 63, 67, 72],
+            null, [58, 62, 65, 70, 74], null, [58, 62, 65, 70],
+            [57, 60, 65, 69, 72], null, [57, 60, 65, 69], null,
+            [58, 62, 67, 70, 74], null, [60, 65, 69, 74], null
+        ],
+        visualHeights: [1.0, 0, 0.85, 0.85, 0, 0.95, 0, 0.85, 0.95, 0, 0.85, 0, 0.95, 0, 1.0, 0]
+    },
+    {
+        id: 'chords_celesta', name: 'Dreamy Glass Celesta', shortName: 'Celesta', category: 'chords', synthType: 'rhodes',
+        steps: [
+            [72, 75, 79], null, [74, 77, 82], null,
+            [75, 79, 84], null, [74, 77, 82], null,
+            [72, 75, 79], null, [70, 74, 77], null,
+            [69, 72, 77], null, [70, 74, 79], null
+        ],
+        visualHeights: [0.85, 0, 0.9, 0, 1.0, 0, 0.9, 0, 0.85, 0, 0.8, 0, 0.8, 0, 0.9, 0]
+    },
+    {
+        id: 'chords_accordion', name: 'Parisian Bistro Musette', shortName: 'Accordion', category: 'chords', synthType: 'accordion',
+        steps: [
+            null, [60, 63, 67], null, [60, 63, 67],
+            null, [58, 62, 65], null, [58, 62, 65],
+            null, [57, 60, 65], null, [57, 60, 65],
+            null, [55, 58, 62], [58, 62, 65], null
+        ],
+        visualHeights: [0, 0.85, 0, 0.85, 0, 0.85, 0, 0.85, 0, 0.85, 0, 0.85, 0, 0.8, 0.9, 0]
+    },
+    {
+        id: 'chords_glassarmonica', name: 'Crystal Glass Armonica', shortName: 'Glass Bowls', category: 'chords', synthType: 'glassarmonica',
+        steps: [
+            [72, 75, 79, 84], null, null, null,
+            [70, 74, 77, 82], null, null, null,
+            [69, 72, 77, 81], null, null, null,
+            [67, 70, 74, 79], null, null, null
+        ],
+        visualHeights: [1.0, 0.85, 0.7, 0.55, 0.95, 0.8, 0.65, 0.5, 0.95, 0.8, 0.65, 0.5, 0.9, 0.75, 0.6, 0.45]
+    },
+    {
+        id: 'chords_singingbowls', name: 'Tibetan Singing Bowls', shortName: 'Singing Bowls', category: 'chords', synthType: 'singingbowls',
+        steps: [
+            [60, 67, 74], null, null, null,
+            null, null, [63, 70, 75], null,
+            null, null, null, null,
+            [58, 65, 72], null, null, null
+        ],
+        visualHeights: [1.0, 0.85, 0.7, 0.55, 0.4, 0.3, 0.95, 0.8, 0.65, 0.5, 0.4, 0.3, 0.95, 0.8, 0.65, 0.5]
+    },
+
+    // ================= MELODY (17) =================
+    {
+        id: 'melody_sax', name: 'Tenor Saxophone', shortName: 'Tenor Sax', category: 'melody', synthType: 'sax',
+        steps: [null, null, 67, 69, 70, null, 72, null, 74, 72, 70, 67, null, 65, 63, null],
+        visualHeights: [0, 0, 0.65, 0.75, 0.85, 0, 0.95, 0, 1.0, 0.9, 0.8, 0.7, 0, 0.65, 0.6, 0]
+    },
+    {
+        id: 'melody_marimba', name: 'Wooden Marimba', shortName: 'Marimba', category: 'melody', synthType: 'marimba',
+        steps: [72, 67, 70, 67, 74, 67, 72, 67, 75, 72, 70, 69, 67, 70, 69, 65],
+        visualHeights: [0.85, 0.5, 0.75, 0.5, 0.95, 0.5, 0.85, 0.5, 1.0, 0.8, 0.75, 0.7, 0.6, 0.75, 0.7, 0.55]
+    },
+    {
+        id: 'melody_flute', name: 'Studio Alto Flute', shortName: 'Alto Flute', category: 'melody', synthType: 'flute',
+        steps: [79, null, 77, 75, 74, null, null, 72, 74, null, 75, 77, 72, null, null, null],
+        visualHeights: [1.0, 0, 0.9, 0.85, 0.75, 0, 0, 0.65, 0.75, 0, 0.85, 0.9, 0.7, 0, 0, 0]
+    },
+    {
+        id: 'melody_guitar', name: 'Electric Lead Line', shortName: 'Lead Guitar', category: 'melody', synthType: 'funkguitar',
+        steps: [72, null, 70, 72, null, 75, 74, null, 72, null, 70, 69, 67, null, 70, null],
+        visualHeights: [0.9, 0, 0.75, 0.9, 0, 1.0, 0.95, 0, 0.85, 0, 0.75, 0.7, 0.65, 0, 0.8, 0]
+    },
+    {
+        id: 'melody_bells', name: 'Vibraphone Chimes', shortName: 'Vibraphone', category: 'melody', synthType: 'crystalbell',
+        steps: [84, null, 79, null, 82, null, 75, 79, 84, null, 86, null, 82, null, 79, null],
+        visualHeights: [1.0, 0, 0.8, 0, 0.9, 0, 0.75, 0.8, 1.0, 0, 1.0, 0, 0.9, 0, 0.8, 0]
+    },
+    {
+        id: 'melody_kalimba', name: 'Thumb Kalimba', shortName: 'Kalimba', category: 'melody', synthType: 'kalimba',
+        steps: [72, 75, 79, 72, 74, 79, 82, 74, 75, 79, 84, 79, 77, 74, 70, 67],
+        visualHeights: [0.75, 0.8, 0.9, 0.75, 0.8, 0.9, 0.95, 0.8, 0.85, 0.9, 1.0, 0.9, 0.85, 0.8, 0.75, 0.7]
+    },
+    {
+        id: 'melody_steelpan', name: 'Caribbean Steel Drum', shortName: 'Steel Drum', category: 'melody', synthType: 'steeldrum',
+        steps: [72, null, 75, 79, null, 77, 75, null, 74, null, 77, 82, null, 79, 75, 74],
+        visualHeights: [0.85, 0, 0.9, 1.0, 0, 0.9, 0.85, 0, 0.85, 0, 0.9, 1.0, 0, 0.95, 0.85, 0.8]
+    },
+    {
+        id: 'melody_chiptune', name: '8-Bit Arcade Chip Lead', shortName: '8-Bit Lead', category: 'melody', synthType: 'chiptune',
+        steps: [72, 75, 79, 84, 79, 75, 72, 67, 70, 74, 77, 82, 77, 74, 70, 69],
+        visualHeights: [0.8, 0.85, 0.9, 1.0, 0.9, 0.85, 0.8, 0.7, 0.8, 0.85, 0.9, 1.0, 0.9, 0.85, 0.8, 0.75]
+    },
+    {
+        id: 'melody_theremin', name: 'Sci-Fi Eerie Theremin', shortName: 'Theremin', category: 'melody', synthType: 'theremin',
+        steps: [72, null, null, 79, 82, null, 77, null, 75, null, null, 74, 70, null, 67, null],
+        visualHeights: [0.85, 0.6, 0, 0.95, 1.0, 0.7, 0.9, 0, 0.85, 0.6, 0, 0.8, 0.75, 0, 0.7, 0]
+    },
+    {
+        id: 'melody_harmonica', name: 'Blues Harp Harmonica', shortName: 'Harmonica', category: 'melody', synthType: 'sax',
+        steps: [null, 67, 70, 72, 75, 74, 72, 70, null, 67, 70, 69, 67, null, 63, 60],
+        visualHeights: [0, 0.75, 0.85, 0.9, 1.0, 0.95, 0.9, 0.85, 0, 0.75, 0.85, 0.8, 0.75, 0, 0.7, 0.65]
+    },
+    {
+        id: 'melody_sitar', name: 'Mystic Raga Sitar Pluck', shortName: 'Raga Sitar', category: 'melody', synthType: 'sitar',
+        steps: [60, 63, 67, 70, 69, 67, 63, 62, 60, 67, 72, 70, 69, 67, 65, 63],
+        visualHeights: [0.85, 0.8, 0.9, 0.95, 0.9, 0.85, 0.8, 0.75, 0.85, 0.9, 1.0, 0.95, 0.9, 0.85, 0.8, 0.75]
+    },
+    {
+        id: 'melody_panflute', name: 'Andean Bamboo Pan Flute', shortName: 'Pan Flute', category: 'melody', synthType: 'flute',
+        steps: [72, null, 75, null, 79, 77, 75, null, 74, null, 72, 70, 67, null, 70, null],
+        visualHeights: [0.85, 0, 0.9, 0, 1.0, 0.95, 0.9, 0, 0.85, 0, 0.8, 0.75, 0.7, 0, 0.75, 0]
+    },
+    {
+        id: 'melody_glock', name: 'Orchestral Glockenspiel', shortName: 'Glockenspiel', category: 'melody', synthType: 'crystalbell',
+        steps: [84, 86, 87, null, 86, 84, 82, null, 79, 82, 84, null, 82, 79, 77, null],
+        visualHeights: [0.9, 0.95, 1.0, 0, 0.95, 0.9, 0.85, 0, 0.8, 0.85, 0.9, 0, 0.85, 0.8, 0.75, 0]
+    },
+    {
+        id: 'melody_clavlead', name: 'Stevie Funk Synth Solo', shortName: 'Funk Synth', category: 'melody', synthType: 'funkguitar',
+        steps: [60, 63, 65, 66, 67, null, 70, 72, null, 75, 74, 72, 70, 67, 63, 65],
+        visualHeights: [0.75, 0.8, 0.85, 0.88, 0.9, 0, 0.95, 1.0, 0, 1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.8]
+    },
+    {
+        id: 'melody_shamisen', name: 'Tokyo Shamisen Snap', shortName: 'Shamisen', category: 'melody', synthType: 'sitar',
+        steps: [72, null, 72, 75, 79, null, 77, 75, 72, null, 70, 67, 70, 72, null, 67],
+        visualHeights: [0.9, 0, 0.85, 0.9, 1.0, 0, 0.95, 0.9, 0.85, 0, 0.8, 0.75, 0.8, 0.9, 0, 0.75]
+    },
+    {
+        id: 'melody_saw', name: 'Bowed Singing Musical Saw', shortName: 'Musical Saw', category: 'melody', synthType: 'musicalsaw',
+        steps: [72, null, null, 75, 79, null, 84, null, 82, null, 79, 75, 74, null, 72, null],
+        visualHeights: [0.9, 0.65, 0, 0.95, 1.0, 0.75, 1.0, 0.8, 0.95, 0.7, 0.9, 0.85, 0.8, 0.6, 0.85, 0]
+    },
+    {
+        id: 'melody_teslacoil', name: 'High-Voltage Arc Tesla Coil', shortName: 'Tesla Coil', category: 'melody', synthType: 'teslacoil',
+        steps: [72, 84, 75, 87, 79, 91, 77, 89, 75, 87, 74, 86, 70, 82, 67, 79],
+        visualHeights: [0.9, 1.0, 0.85, 1.0, 0.9, 1.0, 0.85, 0.95, 0.85, 1.0, 0.85, 0.95, 0.8, 0.95, 0.8, 0.9]
+    },
+
+    // ================= STRINGS & HORNS (16) =================
+    {
+        id: 'strings_cello', name: 'Solo Mahogany Cello', shortName: 'Solo Cello', category: 'strings', synthType: 'cello',
+        steps: [48, null, null, 51, 55, null, null, null, 53, null, 50, null, 48, null, null, null],
+        visualHeights: [1.0, 0.8, 0.6, 0.85, 0.95, 0.75, 0.6, 0, 0.95, 0.75, 0.85, 0.6, 0.9, 0.7, 0.5, 0]
+    },
+    {
+        id: 'strings_ensemble', name: 'Symphonic Strings', shortName: 'String Sect.', category: 'strings', synthType: 'warmpad',
+        steps: [
+            [60, 63, 67, 72, 75], null, null, null,
+            null, null, null, null,
+            [57, 60, 65, 69, 74], null, null, null,
+            null, null, null, null
+        ],
+        visualHeights: [1.0, 0.8, 0.7, 0.6, 0.5, 0.45, 0.4, 0.35, 0.95, 0.8, 0.7, 0.6, 0.5, 0.45, 0.4, 0.35]
+    },
+    {
+        id: 'strings_pizz', name: 'Pizzicato Plucks', shortName: 'Pizzicato', category: 'strings', synthType: 'pizzicato',
+        steps: [60, 63, null, 67, 72, null, 70, 67, 65, null, 69, 72, null, 74, 72, 67],
+        visualHeights: [0.85, 0.8, 0, 0.9, 1.0, 0, 0.9, 0.85, 0.8, 0, 0.9, 0.95, 0, 1.0, 0.95, 0.85]
+    },
+    {
+        id: 'strings_brass', name: 'Stadium Brass Stabs', shortName: 'Brass Stabs', category: 'strings', synthType: 'brassstab',
+        steps: [
+            [60, 67, 72], null, [60, 67, 72], null,
+            null, [62, 69, 74], null, null,
+            [63, 70, 75], null, null, [62, 69, 74],
+            null, [60, 67, 72], null, null
+        ],
+        visualHeights: [1.0, 0, 0.95, 0, 0, 0.95, 0, 0, 1.0, 0, 0, 0.9, 0, 0.95, 0, 0]
+    },
+    {
+        id: 'strings_harp', name: 'Concert Gliss Harp', shortName: 'Concert Harp', category: 'strings', synthType: 'harp',
+        steps: [60, 62, 63, 65, 67, 69, 70, 72, 74, 75, 77, 79, 82, 79, 75, 72],
+        visualHeights: [0.6, 0.65, 0.7, 0.75, 0.8, 0.82, 0.85, 0.88, 0.9, 0.92, 0.95, 0.98, 1.0, 0.9, 0.8, 0.75]
+    },
+    {
+        id: 'strings_spiccato', name: 'Action Spiccato Violins', shortName: 'Spiccato', category: 'strings', synthType: 'spiccato',
+        steps: [72, 72, 75, 72, 79, 79, 77, 75, 74, 74, 77, 74, 75, 74, 72, 70],
+        visualHeights: [0.85, 0.75, 0.9, 0.75, 1.0, 0.9, 0.9, 0.85, 0.85, 0.75, 0.9, 0.75, 0.9, 0.85, 0.8, 0.75]
+    },
+    {
+        id: 'strings_frenchhorn', name: 'Cinema French Horn Swell', shortName: 'French Horns', category: 'strings', synthType: 'frenchhorn',
+        steps: [
+            [55, 60, 67], null, null, null,
+            [58, 62, 69], null, null, null,
+            [60, 63, 72], null, null, null,
+            [58, 65, 70], null, null, null
+        ],
+        visualHeights: [0.95, 0.75, 0.55, 0, 0.95, 0.75, 0.55, 0, 1.0, 0.8, 0.6, 0, 0.95, 0.75, 0.55, 0]
+    },
+    {
+        id: 'strings_mariachi', name: 'Fiesta Twin Trumpets', shortName: 'Trumpets', category: 'strings', synthType: 'brassstab',
+        steps: [
+            [72, 75], [72, 75], null, [74, 77],
+            [75, 79], null, [74, 77], null,
+            [72, 75], null, [70, 74], [69, 72],
+            [67, 70], null, [70, 74], null
+        ],
+        visualHeights: [0.9, 0.85, 0, 0.9, 1.0, 0, 0.95, 0, 0.9, 0, 0.85, 0.8, 0.8, 0, 0.9, 0]
+    },
+    {
+        id: 'strings_violin', name: 'Virtuoso First Violin', shortName: 'Solo Violin', category: 'strings', synthType: 'violin',
+        steps: [79, null, 82, 84, 86, null, 84, 82, 79, null, 77, 75, 74, null, 72, null],
+        visualHeights: [0.9, 0, 0.95, 1.0, 1.0, 0, 0.95, 0.9, 0.85, 0, 0.8, 0.75, 0.75, 0, 0.7, 0]
+    },
+    {
+        id: 'strings_trombone', name: 'Big Band Trombone Slide', shortName: 'Trombones', category: 'strings', synthType: 'frenchhorn',
+        steps: [
+            [48, 55, 60], null, [51, 58, 63], null,
+            [53, 60, 65], null, [55, 62, 67], null,
+            [58, 65, 70], null, [55, 62, 67], null,
+            [53, 60, 65], null, [50, 57, 62], null
+        ],
+        visualHeights: [0.9, 0, 0.85, 0, 0.9, 0, 0.95, 0, 1.0, 0, 0.95, 0, 0.9, 0, 0.85, 0]
+    },
+    {
+        id: 'strings_orchestrahit', name: '90s Fairlight Orch Hit', shortName: 'Orch Hit', category: 'strings', synthType: 'brassstab',
+        steps: [
+            [48, 60, 63, 67, 72], null, null, [48, 60, 63, 67, 72],
+            null, null, [51, 63, 67, 70, 75], null,
+            [53, 65, 69, 72, 77], null, null, [50, 62, 65, 69, 74],
+            null, [48, 60, 63, 67, 72], null, null
+        ],
+        visualHeights: [1.0, 0, 0, 0.95, 0, 0, 1.0, 0, 1.0, 0, 0, 0.95, 0, 1.0, 0, 0]
+    },
+    {
+        id: 'strings_koto', name: 'Imperial Silk Koto Harp', shortName: 'Silk Koto', category: 'strings', synthType: 'sitar',
+        steps: [72, 74, 75, 79, 84, 79, 75, 74, 72, 70, 67, 70, 72, 74, 75, 79],
+        visualHeights: [0.8, 0.82, 0.85, 0.92, 1.0, 0.92, 0.85, 0.8, 0.78, 0.75, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
+    },
+    {
+        id: 'strings_tremolo', name: 'Suspense Tremolo Strings', shortName: 'Tremolo Str.', category: 'strings', synthType: 'spiccato',
+        steps: [60, 60, 63, 63, 67, 67, 70, 70, 69, 69, 65, 65, 62, 62, 67, 67],
+        visualHeights: [0.75, 0.8, 0.8, 0.85, 0.85, 0.9, 0.95, 1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.8, 0.85, 0.9]
+    },
+    {
+        id: 'strings_banjo', name: 'Bluegrass 5-String Roll', shortName: 'Banjo Roll', category: 'strings', synthType: 'sitar',
+        steps: [60, 67, 72, 60, 63, 67, 72, 63, 65, 69, 74, 65, 67, 70, 74, 67],
+        visualHeights: [0.85, 0.8, 0.95, 0.8, 0.85, 0.8, 0.95, 0.8, 0.85, 0.8, 1.0, 0.8, 0.85, 0.8, 0.95, 0.8]
+    },
+    {
+        id: 'strings_hurdygurdy', name: 'Medieval Wheel Hurdy-Gurdy', shortName: 'Hurdy-Gurdy', category: 'strings', synthType: 'hurdygurdy',
+        steps: [60, 63, 67, 65, 63, 62, 60, 67, 72, 70, 69, 67, 65, 63, 62, 67],
+        visualHeights: [0.95, 0.85, 0.9, 0.85, 0.8, 0.75, 0.85, 0.9, 1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.75, 0.9]
+    },
+    {
+        id: 'strings_waterphone', name: 'Mystic Bronze Waterphone', shortName: 'Waterphone', category: 'strings', synthType: 'waterphone',
+        steps: [72, null, null, 78, null, 83, null, null, 76, null, null, 81, null, 69, null, null],
+        visualHeights: [0.95, 0.75, 0.5, 1.0, 0.75, 1.0, 0.7, 0.4, 0.95, 0.7, 0.45, 1.0, 0.75, 0.9, 0.65, 0]
+    },
+
+    // ================= VOCALS (16) — EXPRESSIVE DIPHTHONG VOCALS =================
+    {
+        id: 'vocal_talkbox', name: 'Talkbox Funk Lead', shortName: 'Talkbox Lead', category: 'vocals', synthType: 'talkbox',
+        steps: [
+            { n: 48, v: 'O', v2: 'A', c: 't' }, { n: 48, v: 'A', v2: 'I' }, { n: 60, v: 'I', v2: 'E', slide: 58 }, { n: 58, v: 'E', v2: 'O' },
+            null, { n: 55, v: 'U', v2: 'A', c: 'k' }, { n: 58, v: 'A', v2: 'O' }, null,
+            { n: 48, v: 'O', v2: 'I', c: 'p' }, { n: 51, v: 'A', v2: 'E' }, { n: 55, v: 'I', v2: 'A' }, { n: 58, v: 'O', v2: 'U' },
+            { n: 60, v: 'E', v2: 'A', c: 't' }, null, { n: 58, v: 'A', v2: 'I' }, { n: 55, v: 'U', v2: 'O' }
+        ],
+        visualHeights: [0.9, 0.85, 1.0, 0.9, 0, 0.8, 0.9, 0, 0.85, 0.85, 0.95, 0.9, 1.0, 0, 0.9, 0.8]
+    },
+    {
+        id: 'vocal_choir', name: 'Cathedral Choir SATB', shortName: 'Cathedral Choir', category: 'vocals', synthType: 'choir',
+        steps: [
+            { notes: [60, 63, 67, 72], v: 'A', v2: 'O' }, null, null, null,
+            null, null, null, null,
+            { notes: [58, 62, 65, 70], v: 'O', v2: 'A' }, null, null, null,
+            { notes: [57, 60, 65, 69], v: 'E', v2: 'A' }, null, null, null
+        ],
+        visualHeights: [1.0, 0.85, 0.75, 0.65, 0.55, 0.45, 0.4, 0.35, 0.95, 0.85, 0.7, 0.55, 0.95, 0.8, 0.65, 0.5]
+    },
+    {
+        id: 'vocal_gospel', name: 'Soul Gospel Diva', shortName: 'Gospel Diva', category: 'vocals', synthType: 'gospel',
+        steps: [
+            null, null, { n: 67, v: 'A', v2: 'I', c: 'h' }, { n: 70, v: 'E', v2: 'A' },
+            { n: 72, v: 'I', v2: 'O', slide: 74 }, null, { n: 74, v: 'A', v2: 'E' }, { n: 72, v: 'O', v2: 'U' },
+            { n: 70, v: 'A', v2: 'O' }, { n: 67, v: 'U', v2: 'A' }, null, null,
+            { n: 65, v: 'E', v2: 'I', c: 'h' }, { n: 67, v: 'A', v2: 'O' }, { n: 63, v: 'O', v2: 'A' }, null
+        ],
+        visualHeights: [0, 0, 0.8, 0.85, 0.95, 0, 1.0, 0.9, 0.85, 0.75, 0, 0, 0.75, 0.85, 0.7, 0]
+    },
+    {
+        id: 'vocal_chants', name: 'Future Vocal Chops', shortName: 'Vocal Chops', category: 'vocals', synthType: 'vocalchop',
+        steps: [
+            { n: 72, v: 'A', v2: 'I', c: 'k' }, null, { n: 75, v: 'I', v2: 'E', c: 't' }, { n: 74, v: 'E', v2: 'A' },
+            null, { n: 70, v: 'O', v2: 'A', c: 'p' }, null, { n: 72, v: 'A', v2: 'I', c: 't' },
+            { n: 75, v: 'I', v2: 'O', c: 'k' }, null, { n: 79, v: 'E', v2: 'I', c: 's' }, null,
+            { n: 77, v: 'A', v2: 'E', c: 'p' }, { n: 75, v: 'O', v2: 'U' }, null, { n: 74, v: 'I', v2: 'A', c: 't' }
+        ],
+        visualHeights: [0.9, 0, 0.95, 0.85, 0, 0.8, 0, 0.9, 0.95, 0, 1.0, 0, 0.95, 0.85, 0, 0.9]
+    },
+    {
+        id: 'vocal_soprano', name: 'Silky R&B Falsetto', shortName: 'R&B Falsetto', category: 'vocals', synthType: 'soprano',
+        steps: [
+            { n: 79, v: 'U', v2: 'A', c: 'h' }, null, null, { n: 77, v: 'I', v2: 'E' },
+            { n: 79, v: 'O', v2: 'A', slide: 82 }, null, { n: 84, v: 'I', v2: 'A' }, null,
+            { n: 82, v: 'A', v2: 'O' }, null, { n: 79, v: 'E', v2: 'I' }, null,
+            { n: 75, v: 'U', v2: 'O', c: 'h' }, null, { n: 74, v: 'A', v2: 'E' }, null
+        ],
+        visualHeights: [0.95, 0.7, 0.5, 0.85, 0.95, 0.6, 1.0, 0.7, 1.0, 0.75, 0.95, 0.6, 0.9, 0.65, 0.85, 0]
+    },
+    {
+        id: 'vocal_beatbox', name: 'Human Beatbox Loop', shortName: 'Beatboxer', category: 'vocals', synthType: 'beatbox',
+        steps: [
+            { b: 'B', v: 'U' }, { b: 'TS', v: 'I' }, { b: 'K', v: 'E' }, { b: 'TS', v: 'I' },
+            { b: 'PF', v: 'O' }, { b: 'TS', v: 'I' }, { b: 'B', v: 'U' }, { b: 'K', v: 'A' },
+            { b: 'B', v: 'U' }, { b: 'B', v: 'U' }, { b: 'TS', v: 'I' }, { b: 'K', v: 'E' },
+            { b: 'PF', v: 'O' }, { b: 'TS', v: 'I' }, { b: 'K', v: 'A' }, { b: 'TS', v: 'I' }
+        ],
+        visualHeights: [1.0, 0.45, 0.8, 0.45, 0.95, 0.45, 0.9, 0.75, 1.0, 0.9, 0.45, 0.8, 0.95, 0.45, 0.8, 0.5]
+    },
+    {
+        id: 'vocal_monks', name: 'Gregorian Chant Monks', shortName: 'Chant Monks', category: 'vocals', synthType: 'monks',
+        steps: [
+            { notes: [48, 55, 60], v: 'O', v2: 'A' }, null, null, null,
+            { notes: [50, 57, 62], v: 'A', v2: 'U' }, null, null, null,
+            { notes: [51, 58, 63], v: 'U', v2: 'O' }, null, null, null,
+            { notes: [46, 53, 58], v: 'O', v2: 'E' }, null, null, null
+        ],
+        visualHeights: [1.0, 0.85, 0.7, 0.55, 0.95, 0.8, 0.65, 0.5, 1.0, 0.85, 0.7, 0.55, 0.9, 0.75, 0.6, 0.45]
+    },
+    {
+        id: 'vocal_vocoder', name: 'Cyber Pop Vocoder', shortName: 'Pop Vocoder', category: 'vocals', synthType: 'vocoder',
+        steps: [
+            { notes: [60, 63, 67, 72], v: 'E', v2: 'A', c: 's' }, null, { notes: [60, 63, 67, 70], v: 'I', v2: 'O', c: 't' }, null,
+            { notes: [58, 62, 65, 70], v: 'A', v2: 'E', c: 'k' }, null, { notes: [58, 62, 65, 69], v: 'O', v2: 'U' }, { notes: [60, 63, 67, 72], v: 'I', v2: 'A', c: 'p' },
+            null, { notes: [62, 65, 69, 74], v: 'A', v2: 'I', c: 't' }, null, { notes: [63, 67, 70, 75], v: 'E', v2: 'O' },
+            { notes: [60, 63, 67, 72], v: 'O', v2: 'A', c: 's' }, null, { notes: [58, 62, 65, 70], v: 'U', v2: 'E' }, null
+        ],
+        visualHeights: [0.95, 0, 0.85, 0, 0.9, 0, 0.8, 0.95, 0, 0.9, 0, 1.0, 0.95, 0, 0.85, 0]
+    },
+    {
+        id: 'vocal_scat', name: 'Bebop Jazz Scat Singer', shortName: 'Jazz Scat', category: 'vocals', synthType: 'talkbox', swingAmount: 0.32,
+        steps: [
+            { n: 60, v: 'U', v2: 'A', c: 'p' }, { n: 63, v: 'I', v2: 'E', c: 't' }, { n: 67, v: 'A', v2: 'O', c: 'k' }, null,
+            { n: 70, v: 'O', v2: 'I', c: 's' }, { n: 69, v: 'A', v2: 'E' }, { n: 67, v: 'I', v2: 'U', c: 't' }, null,
+            { n: 65, v: 'E', v2: 'A', c: 'p' }, { n: 63, v: 'O', v2: 'I' }, { n: 60, v: 'A', v2: 'U', c: 'k' }, { n: 62, v: 'I', v2: 'A' },
+            { n: 63, v: 'O', v2: 'E', c: 't' }, null, { n: 67, v: 'A', v2: 'I' }, null
+        ],
+        visualHeights: [0.85, 0.8, 0.95, 0, 1.0, 0.9, 0.85, 0, 0.85, 0.8, 0.75, 0.8, 0.85, 0, 0.9, 0]
+    },
+    {
+        id: 'vocal_barbershop', name: 'Barbershop Quartet Harmony', shortName: 'Quartet', category: 'vocals', synthType: 'choir',
+        steps: [
+            { notes: [60, 63, 67, 70], v: 'O', v2: 'A', c: 'h' }, null, { notes: [60, 63, 67, 72], v: 'A', v2: 'E' }, null,
+            { notes: [58, 62, 65, 69], v: 'E', v2: 'I' }, null, { notes: [58, 62, 65, 70], v: 'O', v2: 'U' }, null,
+            { notes: [57, 60, 65, 69], v: 'A', v2: 'O' }, null, { notes: [60, 63, 67, 72], v: 'I', v2: 'A' }, null,
+            { notes: [62, 65, 69, 74], v: 'O', v2: 'E' }, null, { notes: [58, 62, 67, 70], v: 'U', v2: 'A' }, null
+        ],
+        visualHeights: [0.95, 0, 0.9, 0, 0.9, 0, 0.85, 0, 0.9, 0, 0.95, 0, 1.0, 0, 0.9, 0]
+    },
+    {
+        id: 'vocal_hypeman', name: 'Stadium Hype Chant Yo!', shortName: 'Hype Chants', category: 'vocals', synthType: 'vocalchop',
+        steps: [
+            null, null, null, null,
+            { n: 60, v: 'E', v2: 'O', c: 'h' }, null, { n: 60, v: 'A', v2: 'O', c: 'h' }, null,
+            null, null, null, null,
+            { n: 63, v: 'I', v2: 'A', c: 'h' }, null, { n: 60, v: 'O', v2: 'U', c: 'h' }, { n: 60, v: 'A', v2: 'O', c: 'h' }
+        ],
+        visualHeights: [0, 0, 0, 0, 1.0, 0, 0.95, 0, 0, 0, 0, 0, 1.0, 0, 0.9, 0.95]
+    },
+    {
+        id: 'vocal_throat', name: 'Overtone Sub Throat Chant', shortName: 'Throat Chant', category: 'vocals', synthType: 'monks',
+        steps: [
+            { notes: [36, 48, 55], v: 'U', v2: 'O' }, null, { notes: [36, 48, 58], v: 'O', v2: 'A' }, null,
+            { notes: [36, 48, 60], v: 'A', v2: 'I' }, null, { notes: [36, 48, 58], v: 'I', v2: 'O' }, null,
+            { notes: [36, 48, 55], v: 'O', v2: 'U' }, null, { notes: [36, 48, 62], v: 'A', v2: 'E' }, null,
+            { notes: [36, 48, 60], v: 'E', v2: 'O' }, null, { notes: [36, 48, 55], v: 'U', v2: 'A' }, null
+        ],
+        visualHeights: [1.0, 0, 0.9, 0, 0.95, 0, 0.9, 0, 1.0, 0, 0.95, 0, 0.9, 0, 0.85, 0]
+    },
+    {
+        id: 'vocal_opera', name: 'Aria Coloratura Queen', shortName: 'Opera Queen', category: 'vocals', synthType: 'soprano',
+        steps: [
+            { n: 72, v: 'A', v2: 'O' }, null, { n: 75, v: 'O', v2: 'A' }, null,
+            { n: 79, v: 'A', v2: 'I', slide: 84 }, null, null, null,
+            { n: 82, v: 'I', v2: 'E' }, null, { n: 79, v: 'E', v2: 'A' }, null,
+            { n: 77, v: 'A', v2: 'O', slide: 74 }, null, { n: 72, v: 'O', v2: 'U' }, null
+        ],
+        visualHeights: [0.85, 0, 0.9, 0, 1.0, 0.85, 0.7, 0, 0.95, 0, 0.9, 0, 0.85, 0, 0.8, 0]
+    },
+    {
+        id: 'vocal_whistle', name: 'Breezy Human Whistle Tune', shortName: 'Whistler', category: 'vocals', synthType: 'whistle',
+        steps: [84, null, 82, 79, 82, null, 79, 75, 77, null, 79, 82, 79, null, 72, null],
+        visualHeights: [1.0, 0, 0.9, 0.85, 0.9, 0, 0.85, 0.75, 0.8, 0, 0.85, 0.95, 0.85, 0, 0.75, 0]
+    },
+    {
+        id: 'vocal_soulgroup', name: 'Motown Doowop Backings', shortName: 'Doowop Oohs', category: 'vocals', synthType: 'vocoder',
+        steps: [
+            { notes: [60, 63, 67], v: 'U', v2: 'O', c: 'h' }, null, null, { notes: [62, 65, 69], v: 'A', v2: 'O' },
+            null, { notes: [63, 67, 70], v: 'O', v2: 'U' }, null, null,
+            { notes: [58, 62, 65], v: 'U', v2: 'A', c: 'h' }, null, null, { notes: [60, 63, 67], v: 'A', v2: 'E' },
+            null, { notes: [62, 65, 69], v: 'E', v2: 'O' }, null, null
+        ],
+        visualHeights: [0.95, 0.65, 0, 0.85, 0, 0.9, 0.6, 0, 0.95, 0.65, 0, 0.85, 0, 0.9, 0.6, 0]
+    },
+    {
+        id: 'vocal_tuvancyborg', name: 'Sub-Harmonic Overtone Cyborg', shortName: 'Cyborg Throat', category: 'vocals', synthType: 'tuvancyborg',
+        steps: [
+            { notes: [36, 48, 72], v: 'O', v2: 'I', c: 'k' }, null, { notes: [36, 48, 74], v: 'I', v2: 'U' }, null,
+            { notes: [36, 48, 75], v: 'U', v2: 'A', c: 't' }, null, { notes: [36, 48, 79], v: 'A', v2: 'I' }, null,
+            { notes: [36, 48, 77], v: 'I', v2: 'O', c: 'k' }, null, { notes: [36, 48, 75], v: 'O', v2: 'E' }, null,
+            { notes: [36, 48, 74], v: 'E', v2: 'U', c: 'p' }, null, { notes: [36, 48, 72], v: 'U', v2: 'O' }, null
+        ],
+        visualHeights: [1.0, 0, 0.9, 0, 0.95, 0, 1.0, 0, 0.95, 0, 0.9, 0, 0.9, 0, 0.85, 0]
+    }
+];

@@ -1,8 +1,8 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
 const vm = require('node:vm');
-const THREE = require('../vendor/three.min.js');
-const html = fs.readFileSync('sonicstage_3d_interactive_instrument_loop_station.html', 'utf8');
+const THREE = require('../public/vendor/three.min.js');
+const { appSource, readPublic } = require('./app-source.cjs');
+const html = appSource();
 // Isolate the production camera functions without starting Web Audio or WebGL.
 function productionFunction(name) {
     const start = html.indexOf(`function ${name}(`);
@@ -76,7 +76,7 @@ const workspace=vm.createContext({
     cinematicState:{active:false},playSongFrom:()=>actions.push('start'),stopSong:()=>actions.push('stop'),
     showHelp:()=>actions.push('help'),toggleCinematicPause:()=>actions.push('cinema')
 });
-vm.runInContext(fs.readFileSync('studio.js','utf8'),workspace);
+vm.runInContext(readPublic('js/ui/workspace.js'),workspace);
 // The global function declarations can be replaced without changing the keyboard routing.
 workspace.undoStudio=()=>actions.push('undo');workspace.redoStudio=()=>actions.push('redo');
 vm.runInContext('studioStarted=true',workspace);

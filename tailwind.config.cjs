@@ -1,11 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-    content: [
-        './sonicstage_3d_interactive_instrument_loop_station.html',
-        './studio.js',
-        './experience.js',
-        './song-generator.js',
-    ],
+    content: ['./public/index.html', './public/js/**/*.js'],
     darkMode: 'class',
     // Live track colors and playback states also appear in generated markup.
     // Keep their exact classes available if that markup moves between files.

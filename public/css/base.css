@@ -1,0 +1,244 @@
+* {
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-user-select: none;
+}
+body, html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: #070913;
+    color: #F1F5F9;
+}
+/* Obsidian & Brass Glassmorphic Studio Panels */
+.studio-panel {
+    background: rgba(11, 15, 27, 0.86);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(226, 184, 87, 0.16);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+.studio-token {
+    background: rgba(19, 25, 42, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.studio-token:hover {
+    background: rgba(29, 38, 62, 0.95);
+    border-color: rgba(226, 184, 87, 0.35);
+    transform: translateY(-1px);
+}
+.studio-token:active {
+    transform: translateY(0px) scale(0.98);
+}
+
+/* Active Category Accent Borders */
+.active-drums   { border-color: #f59e0b !important; background: rgba(245, 158, 11, 0.16) !important; box-shadow: 0 0 14px rgba(245, 158, 11, 0.2); }
+.active-bass    { border-color: #06b6d4 !important; background: rgba(6, 182, 212, 0.16) !important; box-shadow: 0 0 14px rgba(6, 182, 212, 0.2); }
+.active-chords  { border-color: #8b5cf6 !important; background: rgba(139, 92, 246, 0.16) !important; box-shadow: 0 0 14px rgba(139, 92, 246, 0.2); }
+.active-melody  { border-color: #10b981 !important; background: rgba(16, 185, 129, 0.16) !important; box-shadow: 0 0 14px rgba(16, 185, 129, 0.2); }
+.active-strings { border-color: #ec4899 !important; background: rgba(236, 72, 153, 0.16) !important; box-shadow: 0 0 14px rgba(236, 72, 153, 0.2); }
+.active-vocals  { border-color: #f43f5e !important; background: rgba(244, 63, 94, 0.16) !important; box-shadow: 0 0 14px rgba(244, 63, 94, 0.2); }
+
+/* Range Slider */
+input[type=range].hw-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    background: #1e263d;
+    height: 5px;
+    border-radius: 999px;
+    outline: none;
+    min-width: 0;
+    width: 100%;
+}
+input[type=range].hw-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #f59e0b;
+    border: 2px solid #070913;
+    cursor: pointer;
+    transition: transform 0.12s ease;
+}
+input[type=range].hw-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+/* Subtle Scrollbars */
+::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+}
+::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.22);
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(226, 184, 87, 0.28);
+    border-radius: 999px;
+}
+
+/* Floating 3D Pedestal Badges */
+.pedestal-hud {
+    pointer-events: auto;
+    top: 0;
+    left: 0;
+    will-change: transform;
+    transition: opacity 0.15s ease;
+}
+
+@media (max-width: 640px) {
+    .pedestal-hud-slider-row {
+        display: none !important;
+    }
+    .pedestal-hud.hud-expanded .pedestal-hud-slider-row {
+        display: flex !important;
+    }
+}
+
+/* CSS-Variable Driven Beat Bar Sizing (Zero DOM Reflow on Resize) */
+#timeline-tracks-wrapper {
+    --step-cell-h: 20px;
+    --row-pad-y: 4px;
+    will-change: max-height;
+    contain: content;
+}
+.timeline-track-row {
+    padding-top: var(--row-pad-y, 4px);
+    padding-bottom: var(--row-pad-y, 4px);
+    contain: layout style;
+}
+
+/* Interactive Step Cell Hover & Active Effects */
+.timeline-cell {
+    height: var(--step-cell-h, 20px);
+    cursor: pointer;
+    transition: background-color 0.1s ease;
+}
+.timeline-cell:hover {
+    background-color: rgba(245, 158, 11, 0.22) !important;
+}
+.timeline-cell:active {
+    transform: scale(0.92);
+}
+
+/* Drag Ghost */
+#drag-ghost {
+    pointer-events: none;
+    position: fixed;
+    z-index: 9999;
+    transform: translate(-50%, -50%);
+    display: none;
+}
+
+.grid-cols-16 {
+    grid-template-columns: repeat(16, minmax(0, 1fr));
+}
+
+/* Hide scrollbar utility for mobile horizontal strips */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+/* A quiet, letterboxed performance surface above the editing workspace. */
+body.cinematic-mode #transport-header,
+body.cinematic-mode #bottom-dock,
+body.cinematic-mode #pedestal-hud-layer,
+body.cinematic-mode #pro-fx-drawer,
+body.cinematic-mode #stage-toast { visibility: hidden; pointer-events: none; }
+body.cinematic-mode #canvas-container { pointer-events: none; }
+#cinematic-overlay { position: fixed; inset: 0; z-index: 35; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; background: radial-gradient(ellipse at center, transparent 38%, #02040b80 100%); }
+#cinematic-overlay[hidden] { display: none; }
+.cinema-top, .cinema-bottom { position: relative; pointer-events: auto; padding: 22px 36px; background: #03050a; }
+.cinema-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid #e2b85726; }
+.cinema-eyebrow { font: 600 10px 'IBM Plex Mono', monospace; letter-spacing: .18em; color: #e2b857; }
+.cinema-brand { font: 600 12px 'Manrope', sans-serif; color: #e2e8f0; letter-spacing: .12em; margin-top: 5px; }
+.cinema-controls { display: flex; align-items: center; gap: 8px; }
+.cinema-control { cursor: pointer; border: 1px solid #ffffff26; background: #ffffff08; color: #e2e8f0; border-radius: 7px; padding: 9px 13px; font: 500 11px 'IBM Plex Mono', monospace; }
+.cinema-control:hover { border-color: #e2b85780; background: #e2b85716; }
+.cinema-control:disabled { opacity: .35; cursor: default; }
+.cinema-control:focus-visible { outline: 2px solid #fbbf24; outline-offset: 3px; }
+.cinema-bottom { padding-top: 18px; padding-bottom: max(22px, env(safe-area-inset-bottom)); border-top: 1px solid #e2b85726; }
+.cinema-caption { display: flex; align-items: end; justify-content: space-between; gap: 18px; }
+#cinema-subject { margin: 7px 0 0; font: 600 clamp(20px, 3vw, 32px) 'Manrope', sans-serif; letter-spacing: -.03em; }
+#cinema-position { color: #94a3b8; font: 10px 'IBM Plex Mono', monospace; line-height: 1.8; text-align: right; }
+.cinema-progress { margin-top: 17px; height: 2px; background: #ffffff1a; overflow: hidden; }
+#cinema-progress-fill { height: 100%; width: 0; background: #e2b857; transition: width .15s linear; }
+@media (max-width: 600px) {
+    .cinema-top, .cinema-bottom { padding-left: 16px; padding-right: 16px; }
+    .cinema-top { padding-top: max(14px, env(safe-area-inset-top)); padding-bottom: 14px; }
+    .cinema-eyebrow { font-size: 8px; letter-spacing: .12em; }
+    .cinema-brand { font-size: 10px; }
+    .cinema-control { font-size: 10px; padding: 8px; }
+    #cinema-position { font-size: 9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    #cinema-progress-fill { transition: none; }
+}
+
+/* Song composer shares the sound library and measure editor with the stage. */
+.song-button { padding: 6px 10px; border: 1px solid #ffffff20; border-radius: 7px; background: #ffffff08; color: #cbd5e1; font: 600 11px 'IBM Plex Mono', monospace; cursor: pointer; white-space: nowrap; }
+.song-button:hover { background: #ffffff14; color: white; }
+.song-button:disabled { opacity: .3; cursor: default; }
+.song-button[aria-pressed="true"], .song-button.primary { color: #fde68a; background: #f59e0b20; border-color: #f59e0b60; }
+.song-button:focus-visible, .measure-select:focus-visible, .song-clip:focus-visible { outline: 2px solid #fbbf24; outline-offset: -2px; }
+#song-workspace { display: none; position: fixed; inset: var(--transport-height, 90px) 0 0; z-index: 15; padding: 10px 20px; gap: 10px; flex-direction: column; background: #070913; overflow-y: auto; }
+body.song-view #song-workspace { display: flex; }
+body.song-view #canvas-container, body.song-view #pedestal-hud-layer { visibility: hidden; }
+.song-arrangement { display: flex; flex: 1 0 360px; min-height: 360px; flex-direction: column; overflow: hidden; border: 1px solid #e2b85729; border-radius: 12px; background: #0b0f1b; }
+.song-toolbar { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 12px 14px; border-bottom: 1px solid #ffffff12; }
+.song-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.song-title { font: 700 16px 'Manrope', sans-serif; }
+.song-hint { font: 10px 'IBM Plex Mono', monospace; color: #94a3b8; margin-top: 4px; line-height: 1.6; }
+#song-sheet-scroll { flex: 1; overflow: auto; min-height: 100px; }
+#song-sheet { border-collapse: separate; border-spacing: 0; table-layout: fixed; font: 10px 'IBM Plex Mono', monospace; }
+#song-sheet th, #song-sheet td { border-right: 1px solid #ffffff0c; border-bottom: 1px solid #ffffff0c; padding: 0; }
+#song-sheet thead th { position: sticky; top: 0; z-index: 2; background: #101625; }
+#song-sheet .instrument-label { position: sticky; left: 0; width: 140px; min-width: 140px; max-width: 140px; z-index: 1; background: #0d1220; text-align: left; padding: 10px 12px; color: #cbd5e1; overflow: hidden; text-overflow: ellipsis; }
+#song-sheet thead .instrument-label { z-index: 3; }
+.measure-select { display: block; width: 208px; padding: 10px; text-align: left; color: #94a3b8; background: transparent; border: 0; cursor: pointer; }
+.measure-select strong { display: block; color: #e2e8f0; font-size: 11px; margin-bottom: 4px; }
+#song-sheet .is-selected { background: #f59e0b0c; box-shadow: inset 2px 0 #f59e0b, inset -2px 0 #f59e0b; }
+#song-sheet th.is-selected { background: #302619; }
+#song-sheet th.is-playing strong::before { content: '▶ '; color: #34d399; }
+.song-clip { display: grid; grid-template-columns: repeat(16, 1fr); gap: 2px; align-items: end; width: 208px; height: 40px; padding: 8px; background: none; border: 0; cursor: pointer; }
+.song-clip span { height: 100%; border-radius: 2px; background: #ffffff08; }
+.song-clip span:nth-child(4n + 1) { border-left: 1px solid #ffffff30; }
+.song-clip.is-muted { opacity: .25; }
+#song-sheet td.is-playing-step { background: #34d3990c; }
+.song-clip span.playing-step { outline: 1px solid #6ee7b7; }
+.song-footer { padding: 9px 14px; display: flex; flex-shrink: 0; flex-wrap: wrap; align-items: center; gap: 8px; border-top: 1px solid #ffffff12; }
+.song-input { background: #05070f; color: #fde68a; border: 1px solid #ffffff20; border-radius: 6px; padding: 5px 7px; font: 11px 'IBM Plex Mono', monospace; user-select: text; }
+#song-workspace #bottom-dock { position: relative; inset: auto; padding: 0; max-height: none; flex-shrink: 0; }
+#song-workspace #selector-tray-panel, #song-workspace #timeline-panel { max-width: none; }
+#song-workspace #timeline-tracks-wrapper { max-height: 220px !important; }
+body.song-view #beatbar-resize-handle, body.song-view .beatbar-size-btn, body.song-view [data-cam], body.song-view #btn-toggle-timeline { display: none; }
+#measure-context { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; max-width: 72rem; margin: 0 auto; padding: 7px 10px; border-radius: 12px; pointer-events: auto; flex-shrink: 0; font: 11px 'IBM Plex Mono', monospace; }
+.measure-editor-status { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.measure-editor-heading { display: flex; align-items: center; gap: 6px; color: #94a3b8; font-size: 9px; font-weight: 600; letter-spacing: .08em; }
+.measure-editor-heading::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: #fbbf24; }
+.measure-navigation { display: flex; align-items: center; gap: 6px; }
+#measure-context strong { color: #fde68a; min-width: 148px; text-align: center; font-weight: 600; white-space: nowrap; }
+#measure-context .song-button { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border-radius: 6px; }
+#measure-context .song-button:disabled { background: transparent; opacity: .25; }
+.measure-editor-hint { color: #94a3b8; font-size: 10px; line-height: 1.5; }
+#song-workspace #measure-context { max-width: none; }
+@media (max-width: 640px) {
+    #song-workspace { padding: 6px; gap: 6px; }
+    .song-toolbar { padding: 9px; }
+    .song-arrangement { flex: 0 0 auto; }
+    #song-sheet-scroll { flex: 0 0 200px; }
+    #song-sheet .instrument-label { min-width: 100px; width: 100px; max-width: 100px; padding: 8px; }
+    .song-button { font-size: 10px; padding: 6px 8px; }
+    #measure-context { padding: 6px 8px; }
+    .measure-editor-status { gap: 8px; }
+    #measure-context strong { min-width: 130px; font-size: 10px; }
+    .measure-editor-hint { display: none; }
+}

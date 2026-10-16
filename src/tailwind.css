@@ -1,0 +1,4 @@
+/* Tailwind input. `npm run build` compiles this to public/css/tailwind.css. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

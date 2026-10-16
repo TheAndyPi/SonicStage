@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>SonicStage — Music studio</title>
+    <script>
+        try { document.documentElement.dataset.theme = localStorage.getItem('sonicstage-theme') === 'dark' ? 'dark' : 'light'; } catch (_) {}
+    </script>
+    <!-- Tailwind CSS -->
+    <link rel="stylesheet" href="css/tailwind.css">
+    <!-- Three.js r128 & OrbitControls -->
+    <script src="vendor/three.min.js"></script>
+    <script src="vendor/OrbitControls.js"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/workspace.css">
+    <link rel="stylesheet" href="css/theme.css">
+</head>
+<body class="home-open relative w-screen h-screen overflow-hidden select-none">
+
+    <!-- 1. THREE.JS GRAND AMPHITHEATER CANVAS -->
+    <div id="canvas-container" class="absolute inset-0 w-full h-full z-0 cursor-grab active:cursor-grabbing"></div>
+
+    <!-- 2. FLOATING PEDESTAL LABELS OVERLAY -->
+    <div id="pedestal-hud-layer" class="absolute inset-0 pointer-events-none z-10 overflow-hidden"></div>
+
+    <!-- 3. DRAG GHOST TOKEN -->
+    <div id="drag-ghost" class="studio-panel px-3 py-1.5 rounded-lg flex items-center gap-2 shadow-2xl border border-amber-400/40">
+        <span id="drag-ghost-dot" class="w-2.5 h-2.5 rounded-full"></span>
+        <span id="drag-ghost-label" class="font-display text-xs font-bold text-white"></span>
+    </div>
+
+    <!-- 4. STAGE CAPACITY TOAST -->
+    <div id="stage-toast" class="fixed top-16 left-1/2 -translate-x-1/2 z-40 pointer-events-none opacity-0 -translate-y-2 transition-all duration-300">
+        <div class="studio-panel px-4 py-1.5 rounded-xl border border-amber-400/30 flex items-center gap-2.5">
+            <span id="stage-toast-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+            <span id="stage-toast-text" role="status" class="font-mono text-[11px] font-semibold text-amber-100 tracking-wide"></span>
+        </div>
+    </div>
+
+    <section id="cinematic-overlay" aria-label="Song showcase" hidden>
+        <div class="cinema-top">
+            <div><div class="cinema-eyebrow">SONICSTAGE / SONG SHOWCASE</div><div id="cinema-status" class="cinema-brand" role="status">SETTING THE SCENE</div></div>
+            <div class="cinema-controls">
+                <button id="cinema-pause" class="cinema-control" aria-label="Pause showcase">Pause</button>
+                <button id="cinema-replay" class="cinema-control" aria-label="Replay showcase from the beginning">Replay</button>
+                <button id="cinema-exit" class="cinema-control" aria-label="Exit showcase (Escape)">Exit <span aria-hidden="true">↗</span></button>
+            </div>
+        </div>
+        <div class="cinema-bottom">
+            <div class="cinema-caption">
+                <div><div id="cinema-shot" class="cinema-eyebrow">THE OPENING / WIDE</div><h2 id="cinema-subject">The stage is yours.</h2></div>
+                <div id="cinema-position">From the first measure.<br>Through the final note.</div>
+            </div>
+            <div class="cinema-progress" role="progressbar" aria-label="Song showcase progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="cinema-progress-fill"></div></div>
+        </div>
+    </section>
+
+    <!-- 5. TOP TRANSPORT, HARMONY, PRO FX & RECORDER BAR -->
+    <header id="transport-header">
+        <div class="project-bar">
+            <button id="studio-home" class="wordmark" title="Start page" aria-label="SonicStage start page"><img class="brand-mark" src="images/brand-mark.svg" width="36" height="36" alt="" aria-hidden="true">sonicstage<span class="brand-dot">.</span></button>
+            <div class="project-name"><input id="project-title" aria-label="Song title" maxlength="60" value="Untitled song"><span id="project-status" role="status">LOCAL SESSION</span></div>
+            <div class="project-actions">
+                <button id="project-undo" class="icon-button" title="Undo (⌘Z)" aria-label="Undo" disabled>↶</button><button id="project-redo" class="icon-button" title="Redo (⇧⌘Z)" aria-label="Redo" disabled>↷</button>
+                <span class="toolbar-divider"></span>
+                <button id="project-new" class="quiet-button desktop-action">New</button><button id="project-open" class="quiet-button desktop-action">Open</button><button id="project-save" class="quiet-button" title="Save song file (⌘S)">Save <span class="desktop-label">song</span></button>
+                <button id="project-generate" class="accent-button"><span aria-hidden="true">✳</span> Generate</button>
+            </div>
+        </div>
+        <div class="control-bar">
+            <div class="transport-controls" role="group" aria-label="Playback">
+                <button id="transport-restart" class="icon-button" aria-label="Play from beginning" title="Play from beginning (Enter)">Ⅰ◀</button>
+                <button id="transport-stop" class="icon-button" aria-label="Stop playback" title="Stop playback (0)"><svg viewBox="0 0 20 20" fill="currentColor"><rect x="5" y="5" width="10" height="10" rx="1"/></svg></button>
+                <button id="btn-play-toggle" title="Play or pause (Space)"><svg id="icon-play" viewBox="0 0 24 24" fill="currentColor"><path d="m8 5 11 7-11 7Z"/></svg><svg id="icon-pause" class="hidden" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h4v14H7zm6 0h4v14h-4z"/></svg><span id="play-status-text" class="sr-only">Play</span></button>
+                <button id="btn-record-toggle" title="Record master output" aria-label="Record audio"><span id="record-dot"></span><span id="record-status-text" class="sr-only">REC</span></button>
+            </div>
+            <div id="transport-position" role="group" aria-label="Playback position"><span class="control-label">BAR</span><strong id="transport-measure">1 / 1</strong><span class="beat-leds"><i id="beat-led-0"></i><i id="beat-led-1"></i><i id="beat-led-2"></i><i id="beat-led-3"></i></span></div>
+            <div class="tempo-control"><label for="bpm-number-input" class="control-label">TEMPO</label><input id="bpm-number-input" type="number" min="1" max="2400" value="112" aria-label="Tempo in BPM"><span class="control-label">BPM</span><input id="bpm-slider" class="hw-slider" type="range" min="0" max="1000" value="510" aria-label="Tempo"></div>
+            <div class="harmony-control"><select id="key-select" aria-label="Root key"><option value="0">C</option><option value="1">C#</option><option value="2">D</option><option value="3">Eb</option><option value="4">E</option><option value="5">F</option><option value="6">F#</option><option value="7">G</option><option value="8">Ab</option><option value="9">A</option><option value="10">Bb</option><option value="11">B</option></select><select id="scale-select" aria-label="Scale"><option value="dorian">Dorian</option><option value="minor">Minor</option><option value="major">Major</option><option value="harmonicMinor">Harm. minor</option><option value="phrygian">Phrygian</option><option value="lydian">Lydian</option><option value="mixolydian">Mixolydian</option></select></div>
+            <div class="workspace-switch" role="group" aria-label="Workspace view"><button id="btn-stage-view" aria-pressed="true">Stage</button><button id="btn-song-view" aria-pressed="false">Arrange</button></div>
+            <button id="btn-pro-fx" class="quiet-button" aria-expanded="false" aria-controls="pro-fx-drawer">FX <span class="desktop-label">rack</span></button>
+            <button id="btn-cinematic" class="quiet-button" title="Watch song with directed cameras">▶ <span class="desktop-label">Showcase</span></button>
+            <div class="output-meter"><canvas id="fft-canvas" width="52" height="22"></canvas><span id="master-db-readout">−∞ dB</span></div>
+        </div>
+        <span id="subtitle-key-info" hidden></span>
+    </header>
+    <div id="stage-toolbar">
+        <div class="stage-heading"><span class="live-dot"></span><span>LIVE STAGE</span><span id="stage-status-pill"><span id="stage-tier-dot" hidden></span><span id="stage-tier-text">0 instruments</span></span></div>
+        <div class="stage-tools"><div class="camera-switch" role="group" aria-label="Stage camera"><button class="cam-btn" data-cam="stage">Wide</button><button class="cam-btn" data-cam="closeup">Close</button><button class="cam-btn" data-cam="overhead">Top</button></div><button id="btn-automix" class="quiet-button" title="Create a new five-instrument loop">Shuffle</button><details class="stage-menu"><summary aria-label="More stage actions">•••</summary><div><button id="btn-mega12">Expand ensemble</button><button id="btn-mega100">100 performers</button><button id="btn-clear">Clear measure</button></div></details></div>
+    </div>
+    <!-- 5B. PRO STUDIO MASTERING & FX RACK DRAWER (FIXED LAYOUT & TOOLBAR CLEARANCE) -->
+    <aside id="pro-fx-drawer" class="fixed top-14 sm:top-16 right-3 sm:right-16 z-30 w-[calc(100vw-1.5rem)] sm:w-[520px] max-w-[94vw] studio-panel rounded-2xl p-3.5 sm:p-4 border border-cyan-400/30 shadow-2xl transition-all duration-200 opacity-0 pointer-events-none translate-y-2">
+        <div class="flex items-center justify-between border-b border-white/10 pb-2.5 mb-3">
+            <div class="flex items-center gap-2 min-w-0">
+                <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shrink-0"></span>
+                <h3 class="font-display font-bold text-xs sm:text-sm text-white tracking-wide truncate">Master & effects</h3>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+                <button id="btn-reset-fx" class="px-2.5 py-1 rounded-md text-[9px] font-mono font-semibold bg-white/10 hover:bg-white/20 text-slate-200 border border-white/10 transition-colors whitespace-nowrap">RESET FX</button>
+                <button id="btn-close-fx" class="w-6 h-6 rounded-lg bg-white/10 hover:bg-rose-500/30 text-slate-300 hover:text-white font-mono text-xs flex items-center justify-center transition-colors">×</button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[10px] font-mono">
+            <!-- 1. 3-Band Master Equalizer -->
+            <div class="bg-[#05070f]/95 border border-white/10 rounded-xl p-3 space-y-2.5 overflow-hidden">
+                <div class="flex items-center justify-between gap-2 text-amber-300 font-bold">
+                    <span class="whitespace-nowrap">3-BAND MASTER EQ</span>
+                    <span class="text-[9px] text-slate-400 whitespace-nowrap shrink-0">±12 dB</span>
+                </div>
+                <div class="grid grid-cols-[54px_1fr_42px] items-center gap-2">
+                    <span class="text-slate-400 whitespace-nowrap">LOW</span>
+                    <input id="fx-eq-low" type="range" min="-12" max="12" step="0.5" value="0" class="hw-slider">
+                    <span id="fx-eq-low-val" class="text-amber-200 text-right whitespace-nowrap">0.0dB</span>
+                </div>
+                <div class="grid grid-cols-[54px_1fr_42px] items-center gap-2">
+                    <span class="text-slate-400 whitespace-nowrap">MID</span>
+                    <input id="fx-eq-mid" type="range" min="-12" max="12" step="0.5" value="0" class="hw-slider">
+                    <span id="fx-eq-mid-val" class="text-amber-200 text-right whitespace-nowrap">0.0dB</span>
+                </div>
+                <div class="grid grid-cols-[54px_1fr_42px] items-center gap-2">
+                    <span class="text-slate-400 whitespace-nowrap">HIGH</span>
+                    <input id="fx-eq-high" type="range" min="-12" max="12" step="0.5" value="0" class="hw-slider">
+                    <span id="fx-eq-high-val" class="text-amber-200 text-right whitespace-nowrap">0.0dB</span>
+                </div>
+            </div>
+
+            <!-- 2. DJ Master Filter & Analog Tape Drive -->
+            <div class="bg-[#05070f]/95 border border-white/10 rounded-xl p-3 space-y-2.5 overflow-hidden">
+                <div class="flex items-center justify-between gap-2 text-cyan-300 font-bold">
+                    <span class="whitespace-nowrap">FILTER & TAPE DRIVE</span>
+                    <span id="fx-filter-mode-badge" class="text-[9px] text-emerald-300 whitespace-nowrap shrink-0">BYPASS</span>
+                </div>
+                <div class="grid grid-cols-[54px_1fr_42px] items-center gap-2" title="Left of center = Lowpass Cutoff • Center = Open • Right of center = Highpass Cutoff">
+                    <span class="text-slate-400 whitespace-nowrap">MORPH</span>
+                    <input id="fx-filter-morph" type="range" min="0" max="100" step="1" value="50" class="hw-slider">
+                    <span id="fx-filter-morph-val" class="text-cyan-200 text-right whitespace-nowrap">OPEN</span>
+                </div>
+                <div class="grid grid-cols-[54px_1fr_42px] items-center gap-2">
+                    <span class="text-slate-400 whitespace-nowrap">RESO Q</span>
+                    <input id="fx-filter-q" type="range" min="0.7" max="12" step="0.1" value="1.2" class="hw-slider">
+                    <span id="fx-filter-q-val" class="text-cyan-200 text-right whitespace-nowrap">1.2</span>
+                </div>
+                <div class="grid grid-cols-[54px_1fr_42px] items-center gap-2" title="Soft-clipping harmonic analog saturation warmth">
+                    <span class="text-slate-400 whitespace-nowrap">DRIVE</span>
+                    <input id="fx-drive" type="range" min="0" max="100" step="1" value="12" class="hw-slider">
+                    <span id="fx-drive-val" class="text-amber-200 text-right whitespace-nowrap">12%</span>
+                </div>
+            </div>
+
+            <!-- 3. Spatial Hall Reverb & BPM Sync Delay -->
+            <div class="bg-[#05070f]/95 border border-white/10 rounded-xl p-3 space-y-2.5 overflow-hidden">
+                <div class="flex items-center justify-between gap-2 text-purple-300 font-bold">
+                    <span class="whitespace-nowrap">REVERB & DELAY</span>
+                    <span class="text-[9px] text-slate-400 whitespace-nowrap shrink-0">BPM SYNC</span>
+                </div>
+                <div class="grid grid-cols-[54px_1fr_42px] items-center gap-2">
+                    <span class="text-slate-400 whitespace-nowrap">REVERB</span>
+                    <input id="fx-reverb-mix" type="range" min="0" max="100" step="1" value="26" class="hw-slider">
+                    <span id="fx-reverb-mix-val" class="text-purple-200 text-right whitespace-nowrap">26%</span>
+                </div>
+                <div class="grid grid-cols-[54px_1fr_42px] items-center gap-2">
+                    <span class="text-slate-400 whitespace-nowrap">DELAY</span>
+                    <input id="fx-delay-mix" type="range" min="0" max="85" step="1" value="0" class="hw-slider">
+                    <span id="fx-delay-mix-val" class="text-purple-200 text-right whitespace-nowrap">0%</span>
+                </div>
+                <div class="grid grid-cols-[54px_1fr_42px] items-center gap-2">
+                    <span class="text-slate-400 whitespace-nowrap">FDBACK</span>
+                    <input id="fx-delay-fb" type="range" min="10" max="80" step="1" value="42" class="hw-slider">
+                    <span id="fx-delay-fb-val" class="text-purple-200 text-right whitespace-nowrap">42%</span>
+                </div>
+            </div>
+
+            <!-- 4. Master Dynamics, Groove Swing & Master Gain -->
+            <div class="bg-[#05070f]/95 border border-white/10 rounded-xl p-3 space-y-2.5 overflow-hidden">
+                <div class="flex items-center justify-between gap-2 text-emerald-300 font-bold">
+                    <span class="whitespace-nowrap">GROOVE & MASTER</span>
+                    <span class="text-[9px] text-slate-400 whitespace-nowrap shrink-0">LIMITER ON</span>
+                </div>
+                <div class="grid grid-cols-[54px_1fr_42px] items-center gap-2" title="Global 16th-note shuffle feel across all instruments">
+                    <span class="text-slate-400 whitespace-nowrap">SWING</span>
+                    <input id="fx-global-swing" type="range" min="0" max="65" step="1" value="4" class="hw-slider">
+                    <span id="fx-global-swing-val" class="text-emerald-200 text-right whitespace-nowrap">4%</span>
+                </div>
+                <div class="grid grid-cols-[54px_1fr_42px] items-center gap-2" title="Master Compressor Threshold">
+                    <span class="text-slate-400 whitespace-nowrap">GLUE</span>
+                    <input id="fx-comp-thresh" type="range" min="-36" max="-4" step="1" value="-16" class="hw-slider">
+                    <span id="fx-comp-thresh-val" class="text-emerald-200 text-right whitespace-nowrap">-16dB</span>
+                </div>
+                <div class="grid grid-cols-[54px_1fr_42px] items-center gap-2">
+                    <span class="text-slate-400 whitespace-nowrap">MASTER</span>
+                    <input id="fx-master-vol" type="range" min="0" max="120" step="1" value="86" class="hw-slider">
+                    <span id="fx-master-vol-val" class="text-emerald-200 text-right whitespace-nowrap">86%</span>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <main id="song-workspace" aria-label="Song composer" hidden>
+        <section class="song-arrangement" aria-label="Full song beat sheet">
+            <div class="song-toolbar">
+                <div><h2 class="song-title">Song arrangement <span id="song-summary" class="text-xs text-slate-400 font-mono"></span></h2>
+                    <p class="song-hint">4/4 · Select a bar to edit. Drag a bar to reorder.</p></div>
+                <div class="song-actions">
+                    <button id="song-showcase" class="song-button primary" title="Watch the full song on the 3D stage">▶ Showcase</button>
+                    <button id="song-play-start" class="song-button primary">▶ From start</button>
+                    <button id="song-play-selected" class="song-button">▶ Play bar</button>
+                    <button id="song-stop" class="song-button">■ Stop</button>
+                    <button id="song-loop" class="song-button" aria-pressed="true">Loop song</button>
+                    <button id="song-audition" class="song-button" aria-pressed="false" title="Loop only the selected measure while editing">Loop bar</button>
+                </div>
+            </div>
+            <div class="song-toolbar">
+                <div class="song-actions">
+                    <button id="song-add" class="song-button primary">+ Add bar</button>
+                    <button id="song-duplicate" class="song-button">Duplicate</button>
+                    <label class="song-hint m-0">Copies <input id="song-repeat-count" class="song-input w-14" type="number" min="1" max="128" value="4" aria-label="Number of copies"></label>
+                    <button id="song-repeat" class="song-button">Repeat</button>
+                    <button id="song-move-left" class="song-button" aria-label="Move selected measure left">←</button>
+                    <button id="song-move-right" class="song-button" aria-label="Move selected measure right">→</button>
+                    <button id="song-delete" class="song-button">Delete bar</button>
+                </div>
+                <div class="song-actions"><span id="song-save-status" class="song-hint" role="status"></span><button id="song-export" class="song-button">Save song</button><button id="song-import" class="song-button">Open song</button><input id="song-file" type="file" accept=".json,application/json" hidden></div>
+            </div>
+            <div id="song-sheet-scroll" tabindex="0" aria-label="Scrollable beat sheet"><table id="song-sheet" aria-label="All instruments and measures"></table></div>
+            <div class="song-footer">
+                <span id="song-position" class="song-hint m-0" role="status">Ready</span>
+                <label class="song-hint m-0 ml-auto">Go to measure <input id="song-jump" class="song-input w-16" type="number" min="1" value="1" aria-label="Go to measure"></label>
+                <label class="song-hint m-0">Label <input id="song-measure-label" class="song-input w-32" maxlength="40" placeholder="Intro, verse…" aria-label="Selected measure label"></label>
+            </div>
+        </section>
+    </main>
+
+    <!-- 6. RESIZABLE BOTTOM DOCK: 6-CATEGORY SELECTOR & INTERACTIVE 16-STEP BEAT MATRIX -->
+    <section id="bottom-dock" class="fixed bottom-0 left-0 right-0 z-20 px-1.5 sm:px-5 pb-1.5 sm:pb-2 pt-1 flex flex-col gap-1 sm:gap-1.5 pointer-events-none max-h-[78vh]">
+        <div id="measure-context" class="studio-panel" aria-label="Measure editor">
+            <div class="measure-editor-status">
+                <span class="measure-editor-heading">EDITING</span>
+                <div class="measure-navigation" role="group" aria-label="Select measure to edit">
+                    <button id="measure-prev" class="song-button" aria-label="Previous measure" title="Previous measure"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m14 7-5 5 5 5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                    <strong id="measure-editing-label" aria-live="polite">Measure 1 of 1</strong>
+                    <button id="measure-next" class="song-button" aria-label="Next measure" title="Next measure"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m10 7 5 5-5 5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                </div>
+            </div>
+            <span class="measure-editor-hint">4/4 · 16 steps</span>
+        </div>
+        <!-- A. Instrument & Vocal Selector Tray -->
+        <div id="selector-tray-panel" class="studio-panel rounded-xl p-1.5 sm:p-2 pointer-events-auto max-w-6xl w-full mx-auto">
+            <div class="flex flex-wrap items-center justify-between gap-1 mb-1 sm:mb-1.5 px-1">
+                <div class="flex items-center gap-1 overflow-x-auto no-scrollbar pb-0.5 max-w-full">
+                    <button data-cat="all" class="cat-tab px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-mono font-semibold bg-amber-400/20 text-amber-200 border border-amber-400/30 transition-colors shrink-0">ALL (100)</button>
+                    <button data-cat="drums" class="cat-tab px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-mono font-semibold text-[#f59e0b] hover:bg-white/5 border border-transparent flex items-center gap-1 transition-colors shrink-0">
+                        <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#f59e0b]"></span>DRUMS
+                    </button>
+                    <button data-cat="bass" class="cat-tab px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-mono font-semibold text-[#06b6d4] hover:bg-white/5 border border-transparent flex items-center gap-1 transition-colors shrink-0">
+                        <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#06b6d4]"></span>BASS
+                    </button>
+                    <button data-cat="chords" class="cat-tab px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-mono font-semibold text-[#8b5cf6] hover:bg-white/5 border border-transparent flex items-center gap-1 transition-colors shrink-0">
+                        <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#8b5cf6]"></span>CHORDS
+                    </button>
+                    <button data-cat="melody" class="cat-tab px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-mono font-semibold text-[#10b981] hover:bg-white/5 border border-transparent flex items-center gap-1 transition-colors shrink-0">
+                        <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#10b981]"></span>MELODY
+                    </button>
+                    <button data-cat="strings" class="cat-tab px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-mono font-semibold text-[#ec4899] hover:bg-white/5 border border-transparent flex items-center gap-1 transition-colors shrink-0">
+                        <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#ec4899]"></span>STRINGS
+                    </button>
+                    <button data-cat="vocals" class="cat-tab px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-mono font-semibold text-[#f43f5e] hover:bg-white/5 border border-transparent flex items-center gap-1 transition-colors shrink-0">
+                        <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#f43f5e]"></span>VOCALS
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-1.5 ml-auto shrink-0">
+                    <button id="btn-toggle-palette" class="px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-mono font-semibold bg-white/10 hover:bg-white/15 text-slate-200 border border-white/10 transition-colors">
+                        COLLAPSE SOUNDS
+                    </button>
+                    <button id="btn-toggle-timeline" class="px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-mono font-semibold bg-white/10 hover:bg-white/15 text-slate-200 border border-white/10 transition-colors">
+                        HIDE BEAT BAR
+                    </button>
+                </div>
+            </div>
+
+            <!-- Preset Pills Grid -->
+            <div id="token-palette" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-1 sm:gap-1.5 max-h-20 sm:max-h-24 overflow-y-auto pr-0.5 transition-all duration-150"></div>
+        </div>
+
+        <!-- B. Resizable Live 16-Step Multi-Track Beat Bar & Custom Sequencer -->
+        <div id="timeline-panel" class="studio-panel rounded-xl p-1.5 sm:p-2 pointer-events-auto max-w-6xl w-full mx-auto flex flex-col relative">
+            <!-- Top Drag Handle for Custom Beat Bar Resizing -->
+            <div id="beatbar-resize-handle" class="w-full h-3 -mt-1 mb-0.5 flex items-center justify-center cursor-ns-resize group" title="Drag up or down to resize Beat Bar height">
+                <div class="w-12 h-1 rounded-full bg-white/15 group-hover:bg-amber-400/70 transition-colors"></div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-1.5 mb-1 px-1">
+                <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                    <h2 class="font-mono text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-slate-200">BEAT EDITOR</h2>
+                    <span id="matrix-capacity-badge" class="text-[8px] sm:text-[9px] font-mono text-amber-300 bg-amber-500/10 border border-amber-400/20 px-1.5 py-0.2 rounded hidden xs:inline-block">6-STAGE RING</span>
+
+                    <!-- Step Click Mode Toggle (Toggle Beat On/Off vs Cycle Note/Drum Variation) -->
+                    <button id="btn-step-edit-mode" class="px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-mono font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-400/30 transition-colors" title="Switch what happens when you tap/click a beat step in the grid">
+                        Edit: Toggle
+                    </button>
+
+                    <!-- Beat Bar Size Selector (SM / MD / LG / XL) -->
+                    <div class="flex items-center bg-[#05070f] rounded p-0.5 border border-white/10" title="Change Beat Bar height and step thickness">
+                        <span class="text-[8px] font-mono text-slate-400 px-1 hidden md:inline">SIZE</span>
+                        <button data-size="sm" class="beatbar-size-btn px-1.5 py-0.2 rounded text-[8px] sm:text-[9px] font-mono font-semibold text-slate-400 hover:text-white transition-colors">SM</button>
+                        <button data-size="md" class="beatbar-size-btn px-1.5 py-0.2 rounded text-[8px] sm:text-[9px] font-mono font-semibold bg-amber-400/25 text-amber-200 transition-colors">MD</button>
+                        <button data-size="lg" class="beatbar-size-btn px-1.5 py-0.2 rounded text-[8px] sm:text-[9px] font-mono font-semibold text-slate-400 hover:text-white transition-colors">LG</button>
+                        <button data-size="xl" class="beatbar-size-btn px-1.5 py-0.2 rounded text-[8px] sm:text-[9px] font-mono font-semibold text-slate-400 hover:text-white transition-colors">XL</button>
+                    </div>
+                </div>
+
+            </div>
+
+            <div id="timeline-tracks-wrapper" class="relative max-h-[124px] overflow-y-auto space-y-1 pr-0.5"></div>
+        </div>
+    </section>
+
+    <!-- 7. START SCREEN — the stage stays live; this is the app home, not a cover. -->
+    <section id="welcome-modal" aria-label="SonicStage start page">
+        <header class="start-header"><div class="wordmark"><img class="brand-mark" src="images/brand-mark.svg" width="36" height="36" alt="" aria-hidden="true">sonicstage<span class="brand-dot">.</span></div><span class="start-version">Home</span></header>
+        <aside class="home-rail" aria-label="Start">
+            <p class="home-kicker">Start</p>
+            <div class="start-actions">
+                <button id="start-new" class="start-action is-primary"><span class="action-symbol" aria-hidden="true">＋</span><span><strong>New song</strong><small>Empty stage</small></span></button>
+                <button id="start-open" class="start-action"><span class="action-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7.5h5.2l1.6 1.8H20V19H4z"/></svg></span><span><strong>Open</strong><small>SonicStage file</small></span></button>
+                <button id="start-generate" class="start-action"><span class="action-symbol" aria-hidden="true">✳</span><span><strong>Generate</strong><small>A finished arrangement</small></span></button>
+            </div>
+            <div class="recent-session" id="recent-session" hidden>
+                <p class="home-kicker">Recent</p>
+                <div id="recent-list" class="recent-list"></div>
+            </div>
+            <div class="home-roster">
+                <p class="home-kicker" id="home-roster-label">On stage</p>
+                <ol id="home-players"></ol>
+            </div>
+            <button id="start-shortcuts" class="home-shortcuts">Keyboard shortcuts</button>
+        </aside>
+        <footer class="start-footer"><span id="home-stage-meta">Stage</span></footer>
+    </section>
+    <dialog id="generator-dialog" class="studio-dialog"><form id="generator-form"><div class="dialog-heading"><div><span class="eyebrow">COMPOSITION</span><h2>Find your next idea.</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close generator">×</button></div><p class="dialog-copy">A complete arrangement, ready to make your own.</p><div class="field-label" id="generator-style-label">Style</div><div class="style-options" role="radiogroup" aria-labelledby="generator-style-label"><label><input type="radio" name="style" value="house" checked><span>House<small>Four on the floor</small></span></label><label><input type="radio" name="style" value="lofi"><span>Lo-fi<small>Loose & mellow</small></span></label><label><input type="radio" name="style" value="funk"><span>Funk<small>Pocket & syncopation</small></span></label><label><input type="radio" name="style" value="cinematic"><span>Cinematic<small>Space & tension</small></span></label></div><div class="generator-fields"><label>Length<select id="generator-bars"><option value="8">8 bars</option><option value="16" selected>16 bars</option><option value="32">32 bars</option></select></label><label>Energy<select id="generator-energy"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></label></div><div class="generator-note">Composed locally · No account needed</div><p id="generator-error" role="alert" hidden></p><button type="submit" id="generator-submit" class="accent-button">✳ Generate song</button></form></dialog>
+    <dialog id="shortcuts-dialog" class="studio-dialog"><div class="dialog-heading"><h2>Keyboard shortcuts</h2><button class="icon-button" data-close-dialog aria-label="Close shortcuts">×</button></div><dl class="shortcut-list"><div><dt>Play / pause</dt><dd><kbd>Space</kbd></dd></div><div><dt>Play from start</dt><dd><kbd>Enter</kbd></dd></div><div><dt>Stop</dt><dd><kbd>0</kbd></dd></div><div><dt>Undo / redo</dt><dd><kbd>⌘ Ctrl Z / ⇧ Z</kbd></dd></div><div><dt>Save song</dt><dd><kbd>⌘ Ctrl S</kbd></dd></div><div><dt>Keyboard shortcuts</dt><dd><kbd>?</kbd></dd></div><div><dt>Cycle note / drum hit</dt><dd><kbd>Shift + click</kbd></dd></div><div><dt>Close panel / showcase</dt><dd><kbd>Esc</kbd></dd></div></dl></dialog>
+    <dialog id="track-dialog" class="studio-dialog"><div class="dialog-heading"><div><span class="eyebrow">TRACK CONTROLS</span><h2 id="track-dialog-name">Instrument</h2></div><button class="icon-button" data-close-dialog aria-label="Close track controls">×</button></div><div class="track-faders"><label for="track-volume">Volume <output id="track-volume-value">85%</output></label><input id="track-volume" class="hw-slider" type="range" min="0" max="100" value="85"><label for="track-pan">Pan <output id="track-pan-value">Center</output></label><input id="track-pan" class="hw-slider" type="range" min="-1" max="1" step="0.05" value="0"></div><div class="track-options"><label>Octave<select id="track-octave"><option value="-12">−1 octave</option><option value="0">Original</option><option value="12">+1 octave</option></select></label><button id="track-mute" class="song-button" aria-pressed="false">Mute</button><button id="track-solo" class="song-button" aria-pressed="false">Solo</button></div><div class="track-pattern-actions"><button id="track-shuffle" class="quiet-button">Shuffle pattern</button><button id="track-reset" class="quiet-button">Reset pattern</button><button id="track-remove" class="quiet-button">Remove track</button></div></dialog>
+
+
+    <!-- App scripts. Classic scripts share one global scope, so order matters. -->
+    <script src="js/music/presets.js"></script>
+    <script src="js/music/app-state.js"></script>
+    <script src="js/music/song.js"></script>
+    <script src="js/music/audio-engine.js"></script>
+    <script src="js/stage/scene.js"></script>
+    <script src="js/stage/performers.js"></script>
+    <script src="js/stage/camera.js"></script>
+    <script src="js/stage/labels.js"></script>
+    <script src="js/ui/tracks.js"></script>
+    <script src="js/ui/sequencer.js"></script>
+    <script src="js/stage/render-loop.js"></script>
+    <script src="js/main.js"></script>
+    <script src="js/music/song-generator.js"></script>
+    <script src="js/ui/workspace.js"></script>
+    <script src="js/ui/views.js"></script>
+</body>
+</html>

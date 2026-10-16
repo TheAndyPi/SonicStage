@@ -1,10 +1,8 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const vm = require('node:vm');
+const { appSource, readPublic } = require('./app-source.cjs');
 
-const root = path.resolve(__dirname, '..');
-const html = fs.readFileSync(path.join(root, 'sonicstage_3d_interactive_instrument_loop_station.html'), 'utf8');
+const html = appSource();
 const start = html.indexOf('const KEY_NAMES =');
 const end = html.indexOf('function applySongDocument(');
 assert(start > 0 && end > start, 'Existing song validator and sound library are available');
@@ -16,7 +14,7 @@ const context = vm.createContext({
 // Exercise the actual app's presets, state model, and import validator. No DOM,
 // renderer, or audio device is needed to validate composition and persistence.
 vm.runInContext(html.slice(start, end), context);
-vm.runInContext(fs.readFileSync(path.join(root, 'song-generator.js'), 'utf8'), context);
+vm.runInContext(readPublic('js/music/song-generator.js'), context);
 const originalSong = vm.runInContext('JSON.stringify(songDocument())', context);
 const styles = ['house', 'lofi', 'cinematic', 'funk'];
 const energies = ['low', 'medium', 'high'];

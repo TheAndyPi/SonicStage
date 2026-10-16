@@ -3,13 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "description": "A browser music studio with a live 3D stage.",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
-    "dev": "python3 -m http.server 4173 --bind 127.0.0.1",
-    "build": "npm run build:css",
-    "build:css": "tailwindcss --config tailwind.config.cjs --input styles/utilities.css --output vendor/utilities.css --minify",
-    "test": "node tests/song-generator.test.cjs && node tests/workspace.test.cjs"
+    "dev": "python3 -m http.server 4173 --bind 127.0.0.1 --directory public",
+    "build": "tailwindcss --config tailwind.config.cjs --input src/tailwind.css --output public/css/tailwind.css --minify",
+    "test": "node tests/song-generator.test.cjs && node tests/workspace.test.cjs",
+    "format": "prettier --write \"public/**/*.{html,css,js}\" \"tests/**/*.cjs\" \"*.{cjs,json,md}\" --ignore-path .prettierignore",
+    "format:check": "prettier --check \"public/**/*.{html,css,js}\" \"tests/**/*.cjs\" \"*.{cjs,json,md}\" --ignore-path .prettierignore"
   },
   "devDependencies": {
+    "prettier": "3.6.2",
     "tailwindcss": "3.4.17"
   }
 }
