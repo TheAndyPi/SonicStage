@@ -1,7 +1,7 @@
 /***********************************************************************
  * 11. INITIALIZATION & UI EVENT BINDINGS
  ***********************************************************************/
-window.onload = function() {
+window.onload = function () {
     initSongComposer();
     initThreeStage();
     if (songState.restored) {
@@ -32,9 +32,15 @@ window.onload = function() {
     document.getElementById('cinema-pause').addEventListener('click', toggleCinematicPause);
     document.addEventListener('keydown', event => {
         if (!cinematicState.active || event.altKey || event.ctrlKey || event.metaKey) return;
-        if (event.key === 'Escape') { event.preventDefault(); exitCinematic(); }
-        else if (event.code === 'Space' && !['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
-            event.preventDefault(); toggleCinematicPause();
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            exitCinematic();
+        } else if (
+            event.code === 'Space' &&
+            !['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)
+        ) {
+            event.preventDefault();
+            toggleCinematicPause();
         }
     });
 
@@ -47,7 +53,10 @@ window.onload = function() {
 
     // Play / Pause Toggle
     document.getElementById('btn-play-toggle').addEventListener('click', () => {
-        if (!appState.isPlaying && audioEngine.songEndScheduled) { playSongFrom(0); return; }
+        if (!appState.isPlaying && audioEngine.songEndScheduled) {
+            playSongFrom(0);
+            return;
+        }
         audioEngine.init();
         appState.isPlaying = !appState.isPlaying;
         updatePlayButtonUI();
@@ -82,15 +91,15 @@ window.onload = function() {
     }
 
     bpmSlider.value = bpmToSlider(appState.bpm);
-    bpmSlider.addEventListener('input', (e) => {
+    bpmSlider.addEventListener('input', e => {
         applyNewBpm(sliderToBpm(e.target.value), 'slider');
     });
 
-    bpmNumberInput.addEventListener('input', (e) => {
+    bpmNumberInput.addEventListener('input', e => {
         if (e.target.value === '') return;
         applyNewBpm(e.target.value, 'number');
     });
-    bpmNumberInput.addEventListener('blur', (e) => {
+    bpmNumberInput.addEventListener('blur', e => {
         applyNewBpm(e.target.value || 112, 'both');
     });
 
@@ -101,11 +110,13 @@ window.onload = function() {
     btnRecord.addEventListener('click', () => {
         const active = audioEngine.toggleMasterRecording();
         if (active) {
-            btnRecord.className = 'flex items-center gap-1 px-2 py-1 rounded-lg font-mono font-bold text-[10px] sm:text-[11px] bg-rose-500/30 text-rose-200 border border-rose-400/50 transition-colors shrink-0';
+            btnRecord.className =
+                'flex items-center gap-1 px-2 py-1 rounded-lg font-mono font-bold text-[10px] sm:text-[11px] bg-rose-500/30 text-rose-200 border border-rose-400/50 transition-colors shrink-0';
             recordDot.className = 'w-2 h-2 rounded-full bg-rose-400 animate-ping';
             recordText.textContent = 'STOP & SAVE';
         } else {
-            btnRecord.className = 'flex items-center gap-1 px-2 py-1 rounded-lg font-mono font-bold text-[10px] sm:text-[11px] bg-white/5 hover:bg-rose-500/20 text-slate-300 hover:text-rose-200 border border-white/10 transition-colors shrink-0';
+            btnRecord.className =
+                'flex items-center gap-1 px-2 py-1 rounded-lg font-mono font-bold text-[10px] sm:text-[11px] bg-white/5 hover:bg-rose-500/20 text-slate-300 hover:text-rose-200 border border-white/10 transition-colors shrink-0';
             recordDot.className = 'w-2 h-2 rounded-full bg-rose-500';
             recordText.textContent = 'REC';
         }
@@ -136,7 +147,7 @@ window.onload = function() {
         const el = document.getElementById(id);
         const valEl = document.getElementById(valId);
         if (!el) return;
-        el.addEventListener('input', (e) => {
+        el.addEventListener('input', e => {
             audioEngine.init();
             const v = Number(e.target.value);
             if (valEl) valEl.textContent = formatter(v);
@@ -144,15 +155,31 @@ window.onload = function() {
         });
     };
 
-    bindFxSlider('fx-eq-low', 'fx-eq-low-val', v => `${v > 0 ? '+' : ''}${v.toFixed(1)}dB`, v => {
-        if (audioEngine.eqLowNode) audioEngine.eqLowNode.gain.setTargetAtTime(v, audioEngine.ctx.currentTime, 0.02);
-    });
-    bindFxSlider('fx-eq-mid', 'fx-eq-mid-val', v => `${v > 0 ? '+' : ''}${v.toFixed(1)}dB`, v => {
-        if (audioEngine.eqMidNode) audioEngine.eqMidNode.gain.setTargetAtTime(v, audioEngine.ctx.currentTime, 0.02);
-    });
-    bindFxSlider('fx-eq-high', 'fx-eq-high-val', v => `${v > 0 ? '+' : ''}${v.toFixed(1)}dB`, v => {
-        if (audioEngine.eqHighNode) audioEngine.eqHighNode.gain.setTargetAtTime(v, audioEngine.ctx.currentTime, 0.02);
-    });
+    bindFxSlider(
+        'fx-eq-low',
+        'fx-eq-low-val',
+        v => `${v > 0 ? '+' : ''}${v.toFixed(1)}dB`,
+        v => {
+            if (audioEngine.eqLowNode) audioEngine.eqLowNode.gain.setTargetAtTime(v, audioEngine.ctx.currentTime, 0.02);
+        },
+    );
+    bindFxSlider(
+        'fx-eq-mid',
+        'fx-eq-mid-val',
+        v => `${v > 0 ? '+' : ''}${v.toFixed(1)}dB`,
+        v => {
+            if (audioEngine.eqMidNode) audioEngine.eqMidNode.gain.setTargetAtTime(v, audioEngine.ctx.currentTime, 0.02);
+        },
+    );
+    bindFxSlider(
+        'fx-eq-high',
+        'fx-eq-high-val',
+        v => `${v > 0 ? '+' : ''}${v.toFixed(1)}dB`,
+        v => {
+            if (audioEngine.eqHighNode)
+                audioEngine.eqHighNode.gain.setTargetAtTime(v, audioEngine.ctx.currentTime, 0.02);
+        },
+    );
 
     const filterMorphEl = document.getElementById('fx-filter-morph');
     const filterQEl = document.getElementById('fx-filter-q');
@@ -178,37 +205,85 @@ window.onload = function() {
     filterMorphEl.addEventListener('input', updateFilterFromUI);
     filterQEl.addEventListener('input', updateFilterFromUI);
 
-    bindFxSlider('fx-drive', 'fx-drive-val', v => `${v}%`, v => {
-        if (audioEngine.driveNode) audioEngine.driveNode.curve = audioEngine.makeDistortionCurve(v);
-    });
-    bindFxSlider('fx-reverb-mix', 'fx-reverb-mix-val', v => `${v}%`, v => {
-        if (audioEngine.reverbSend) audioEngine.reverbSend.gain.setTargetAtTime((v / 100) * 0.9, audioEngine.ctx.currentTime, 0.02);
-    });
-    bindFxSlider('fx-delay-mix', 'fx-delay-mix-val', v => `${v}%`, v => {
-        audioEngine.updateDelaySync();
-        if (audioEngine.delayWetGain) audioEngine.delayWetGain.gain.setTargetAtTime((v / 100) * 0.75, audioEngine.ctx.currentTime, 0.02);
-    });
-    bindFxSlider('fx-delay-fb', 'fx-delay-fb-val', v => `${v}%`, v => {
-        if (audioEngine.delayFeedback) audioEngine.delayFeedback.gain.setTargetAtTime(v / 100, audioEngine.ctx.currentTime, 0.02);
-    });
-    bindFxSlider('fx-global-swing', 'fx-global-swing-val', v => `${v}%`, v => {
-        appState.globalSwing = (v / 100) * 0.55;
-        songChanged();
-    });
-    bindFxSlider('fx-comp-thresh', 'fx-comp-thresh-val', v => `${v}dB`, v => {
-        if (audioEngine.compressor) audioEngine.compressor.threshold.setTargetAtTime(v, audioEngine.ctx.currentTime, 0.02);
-    });
-    bindFxSlider('fx-master-vol', 'fx-master-vol-val', v => `${v}%`, v => {
-        if (audioEngine.masterGain) audioEngine.masterGain.gain.setTargetAtTime(v / 100, audioEngine.ctx.currentTime, 0.02);
-    });
+    bindFxSlider(
+        'fx-drive',
+        'fx-drive-val',
+        v => `${v}%`,
+        v => {
+            if (audioEngine.driveNode) audioEngine.driveNode.curve = audioEngine.makeDistortionCurve(v);
+        },
+    );
+    bindFxSlider(
+        'fx-reverb-mix',
+        'fx-reverb-mix-val',
+        v => `${v}%`,
+        v => {
+            if (audioEngine.reverbSend)
+                audioEngine.reverbSend.gain.setTargetAtTime((v / 100) * 0.9, audioEngine.ctx.currentTime, 0.02);
+        },
+    );
+    bindFxSlider(
+        'fx-delay-mix',
+        'fx-delay-mix-val',
+        v => `${v}%`,
+        v => {
+            audioEngine.updateDelaySync();
+            if (audioEngine.delayWetGain)
+                audioEngine.delayWetGain.gain.setTargetAtTime((v / 100) * 0.75, audioEngine.ctx.currentTime, 0.02);
+        },
+    );
+    bindFxSlider(
+        'fx-delay-fb',
+        'fx-delay-fb-val',
+        v => `${v}%`,
+        v => {
+            if (audioEngine.delayFeedback)
+                audioEngine.delayFeedback.gain.setTargetAtTime(v / 100, audioEngine.ctx.currentTime, 0.02);
+        },
+    );
+    bindFxSlider(
+        'fx-global-swing',
+        'fx-global-swing-val',
+        v => `${v}%`,
+        v => {
+            appState.globalSwing = (v / 100) * 0.55;
+            songChanged();
+        },
+    );
+    bindFxSlider(
+        'fx-comp-thresh',
+        'fx-comp-thresh-val',
+        v => `${v}dB`,
+        v => {
+            if (audioEngine.compressor)
+                audioEngine.compressor.threshold.setTargetAtTime(v, audioEngine.ctx.currentTime, 0.02);
+        },
+    );
+    bindFxSlider(
+        'fx-master-vol',
+        'fx-master-vol-val',
+        v => `${v}%`,
+        v => {
+            if (audioEngine.masterGain)
+                audioEngine.masterGain.gain.setTargetAtTime(v / 100, audioEngine.ctx.currentTime, 0.02);
+        },
+    );
 
     document.getElementById('btn-reset-fx').addEventListener('click', () => {
         audioEngine.init();
         const defaults = [
-            ['fx-eq-low', 0], ['fx-eq-mid', 0], ['fx-eq-high', 0],
-            ['fx-filter-morph', 50], ['fx-filter-q', 1.2], ['fx-drive', 12],
-            ['fx-reverb-mix', 26], ['fx-delay-mix', 0], ['fx-delay-fb', 42],
-            ['fx-global-swing', 4], ['fx-comp-thresh', -16], ['fx-master-vol', 86]
+            ['fx-eq-low', 0],
+            ['fx-eq-mid', 0],
+            ['fx-eq-high', 0],
+            ['fx-filter-morph', 50],
+            ['fx-filter-q', 1.2],
+            ['fx-drive', 12],
+            ['fx-reverb-mix', 26],
+            ['fx-delay-mix', 0],
+            ['fx-delay-fb', 42],
+            ['fx-global-swing', 4],
+            ['fx-comp-thresh', -16],
+            ['fx-master-vol', 86],
         ];
         defaults.forEach(([id, val]) => {
             const el = document.getElementById(id);
@@ -226,10 +301,12 @@ window.onload = function() {
         appState.stepEditMode = appState.stepEditMode === 'toggle' ? 'cycle' : 'toggle';
         if (appState.stepEditMode === 'cycle') {
             btnStepEditMode.textContent = 'Edit: Note';
-            btnStepEditMode.className = 'px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-mono font-semibold bg-cyan-500/25 hover:bg-cyan-500/35 text-cyan-200 border border-cyan-400/40 transition-colors';
+            btnStepEditMode.className =
+                'px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-mono font-semibold bg-cyan-500/25 hover:bg-cyan-500/35 text-cyan-200 border border-cyan-400/40 transition-colors';
         } else {
             btnStepEditMode.textContent = 'Edit: Toggle';
-            btnStepEditMode.className = 'px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-mono font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-400/30 transition-colors';
+            btnStepEditMode.className =
+                'px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-mono font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-400/30 transition-colors';
         }
     });
 
@@ -240,7 +317,9 @@ window.onload = function() {
         });
     });
 
-    document.getElementById('btn-toggle-palette').addEventListener('click', () => setStudioPanel('sounds', appState.paletteCollapsed));
+    document
+        .getElementById('btn-toggle-palette')
+        .addEventListener('click', () => setStudioPanel('sounds', appState.paletteCollapsed));
 
     // Harmonic Root Key & Scale/Mode Selectors
     const keySelect = document.getElementById('key-select');
@@ -257,19 +336,21 @@ window.onload = function() {
         songChanged();
     }
 
-    keySelect.addEventListener('change', (e) => {
+    keySelect.addEventListener('change', e => {
         audioEngine.init();
         appState.rootKey = parseInt(e.target.value, 10) || 0;
         updateHarmonicHeaderInfo();
     });
 
-    scaleSelect.addEventListener('change', (e) => {
+    scaleSelect.addEventListener('change', e => {
         audioEngine.init();
         appState.scaleMode = e.target.value;
         updateHarmonicHeaderInfo();
     });
 
-    document.getElementById('btn-toggle-timeline').addEventListener('click', () => setStudioPanel('beats', !appState.timelineVisible));
+    document
+        .getElementById('btn-toggle-timeline')
+        .addEventListener('click', () => setStudioPanel('beats', !appState.timelineVisible));
 
     // Auto-Mix Button (5-Stage Ensemble)
     document.getElementById('btn-automix').addEventListener('click', () => {

@@ -62,25 +62,25 @@ function getPresetStepVariations(preset) {
             uniqueTokens.push(fallback);
         }
         return [
-            { val: uniqueTokens[0], height: 1.0,  label: String(uniqueTokens[0]) },
+            { val: uniqueTokens[0], height: 1.0, label: String(uniqueTokens[0]) },
             { val: uniqueTokens[1], height: 0.78, label: String(uniqueTokens[1]) },
-            { val: uniqueTokens[2], height: 0.45, label: String(uniqueTokens[2]) }
+            { val: uniqueTokens[2], height: 0.45, label: String(uniqueTokens[2]) },
         ];
     }
 
     if (typeof primary === 'number') {
         return [
-            { val: primary,      height: 0.85, label: 'ROOT' },
-            { val: primary + 7,  height: 0.92, label: '+5TH' },
-            { val: primary + 12, height: 1.0,  label: '+OCT' }
+            { val: primary, height: 0.85, label: 'ROOT' },
+            { val: primary + 7, height: 0.92, label: '+5TH' },
+            { val: primary + 12, height: 1.0, label: '+OCT' },
         ];
     }
 
     if (Array.isArray(primary)) {
         return [
-            { val: [...primary],                height: 0.85, label: 'CHORD 1' },
-            { val: primary.map(n => n + 2),     height: 0.92, label: 'CHORD 2' },
-            { val: primary.map(n => n + 5),     height: 1.0,  label: 'CHORD 3' }
+            { val: [...primary], height: 0.85, label: 'CHORD 1' },
+            { val: primary.map(n => n + 2), height: 0.92, label: 'CHORD 2' },
+            { val: primary.map(n => n + 5), height: 1.0, label: 'CHORD 3' },
         ];
     }
 
@@ -88,23 +88,23 @@ function getPresetStepVariations(preset) {
         if (primary.b) {
             // Beatboxer syllables
             return [
-                { val: { b: 'B',  v: 'U' }, height: 1.0,  label: 'B'  },
+                { val: { b: 'B', v: 'U' }, height: 1.0, label: 'B' },
                 { val: { b: 'PF', v: 'O' }, height: 0.85, label: 'PF' },
-                { val: { b: 'TS', v: 'I' }, height: 0.5,  label: 'TS' }
+                { val: { b: 'TS', v: 'I' }, height: 0.5, label: 'TS' },
             ];
         }
         const baseNote = primary.n || 60;
         return [
-            { val: { ...primary, v: 'A', v2: 'O' },                     height: 0.85, label: 'AH' },
-            { val: { ...primary, n: baseNote + 3, v: 'E', v2: 'I' },    height: 0.92, label: 'EH' },
-            { val: { ...primary, n: baseNote + 7, v: 'O', v2: 'U' },    height: 1.0,  label: 'OH' }
+            { val: { ...primary, v: 'A', v2: 'O' }, height: 0.85, label: 'AH' },
+            { val: { ...primary, n: baseNote + 3, v: 'E', v2: 'I' }, height: 0.92, label: 'EH' },
+            { val: { ...primary, n: baseNote + 7, v: 'O', v2: 'U' }, height: 1.0, label: 'OH' },
         ];
     }
 
     return [{ val: primary, height: 0.88, label: 'HIT' }];
 }
 
-window.handleStepCellClick = function(slotIndex, stepIndex, event) {
+window.handleStepCellClick = function (slotIndex, stepIndex, event) {
     audioEngine.init();
     const slot = appState.slots[slotIndex];
     if (!slot || !slot.preset) return;
@@ -113,7 +113,8 @@ window.handleStepCellClick = function(slotIndex, stepIndex, event) {
     const heightsArr = getSlotHeights(slot);
     const variations = getPresetStepVariations(slot.preset);
     const currentVal = stepsArr[stepIndex];
-    const isCycleAction = appState.stepEditMode === 'cycle' || (event && (event.shiftKey || event.altKey || event.button === 2));
+    const isCycleAction =
+        appState.stepEditMode === 'cycle' || (event && (event.shiftKey || event.altKey || event.button === 2));
 
     if (!isCycleAction) {
         // Toggle Step ON / OFF
@@ -127,7 +128,8 @@ window.handleStepCellClick = function(slotIndex, stepIndex, event) {
                 stepsArr[stepIndex] = cloneStepValue(origStep);
                 heightsArr[stepIndex] = slot.preset.visualHeights[stepIndex] || 0.85;
             } else {
-                const pickVar = stepIndex % 4 === 0 ? variations[0] : (stepIndex % 2 === 0 ? variations[1] : variations[2]);
+                const pickVar =
+                    stepIndex % 4 === 0 ? variations[0] : stepIndex % 2 === 0 ? variations[1] : variations[2];
                 stepsArr[stepIndex] = cloneStepValue(pickVar.val);
                 heightsArr[stepIndex] = pickVar.height;
             }
@@ -160,14 +162,14 @@ window.handleStepCellClick = function(slotIndex, stepIndex, event) {
     highlightSequencerStep(appState.currentStep);
 };
 
-window.randomizeSlotPattern = function(slotIndex) {
+window.randomizeSlotPattern = function (slotIndex) {
     audioEngine.init();
     const slot = appState.slots[slotIndex];
     if (!slot || !slot.preset) return;
     const stepsArr = getSlotSteps(slot);
     const heightsArr = getSlotHeights(slot);
     const variations = getPresetStepVariations(slot.preset);
-    const density = slot.preset.category === 'drums' ? 0.68 : (slot.preset.category === 'chords' ? 0.38 : 0.52);
+    const density = slot.preset.category === 'drums' ? 0.68 : slot.preset.category === 'chords' ? 0.38 : 0.52;
 
     for (let s = 0; s < 16; s++) {
         const isDownbeat = s % 4 === 0;
@@ -185,7 +187,7 @@ window.randomizeSlotPattern = function(slotIndex) {
     highlightSequencerStep(appState.currentStep);
 };
 
-window.resetSlotPattern = function(slotIndex) {
+window.resetSlotPattern = function (slotIndex) {
     const slot = appState.slots[slotIndex];
     if (!slot || !slot.preset) return;
     initSlotSequenceFromPreset(slot, slot.preset);
@@ -194,7 +196,7 @@ window.resetSlotPattern = function(slotIndex) {
     highlightSequencerStep(appState.currentStep);
 };
 
-window.setSlotPan = function(slotIndex, rawPan) {
+window.setSlotPan = function (slotIndex, rawPan) {
     audioEngine.init();
     const slot = appState.slots[slotIndex];
     if (!slot) return;
@@ -203,12 +205,13 @@ window.setSlotPan = function(slotIndex, rawPan) {
     audioEngine.setSlotPan(slotIndex, panVal);
     const panLabel = document.getElementById(`row-pan-label-${slotIndex}`);
     if (panLabel) {
-        panLabel.textContent = panVal === 0 ? 'C' : (panVal < 0 ? `L${Math.round(Math.abs(panVal) * 50)}` : `R${Math.round(panVal * 50)}`);
+        panLabel.textContent =
+            panVal === 0 ? 'C' : panVal < 0 ? `L${Math.round(Math.abs(panVal) * 50)}` : `R${Math.round(panVal * 50)}`;
     }
     songChanged();
 };
 
-window.cycleSlotOctave = function(slotIndex) {
+window.cycleSlotOctave = function (slotIndex) {
     audioEngine.init();
     const slot = appState.slots[slotIndex];
     if (!slot || !slot.preset) return;
@@ -219,7 +222,7 @@ window.cycleSlotOctave = function(slotIndex) {
     highlightSequencerStep(appState.currentStep);
 };
 
-window.setSlotVolume = function(slotIndex, rawPercent) {
+window.setSlotVolume = function (slotIndex, rawPercent) {
     audioEngine.init();
     const slot = appState.slots[slotIndex];
     if (!slot) return;
@@ -252,7 +255,7 @@ window.setSlotVolume = function(slotIndex, rawPercent) {
     songChanged();
 };
 
-window.toggleSlotMute = function(slotIndex) {
+window.toggleSlotMute = function (slotIndex) {
     const slot = appState.slots[slotIndex];
     if (!slot.preset) return;
     slot.muted = !slot.muted;
@@ -260,7 +263,7 @@ window.toggleSlotMute = function(slotIndex) {
     refreshAllUI();
 };
 
-window.toggleSlotSolo = function(slotIndex) {
+window.toggleSlotSolo = function (slotIndex) {
     const slot = appState.slots[slotIndex];
     if (!slot.preset) return;
     slot.solo = !slot.solo;
@@ -268,7 +271,7 @@ window.toggleSlotSolo = function(slotIndex) {
     refreshAllUI();
 };
 
-window.clearSlot = function(slotIndex) {
+window.clearSlot = function (slotIndex) {
     appState.slots[slotIndex].preset = null;
     appState.slots[slotIndex].customSteps = null;
     appState.slots[slotIndex].customHeights = null;
@@ -285,13 +288,30 @@ window.clearSlot = function(slotIndex) {
 };
 
 // Pedestals are a song-wide layout, so a move swaps the two spots in every measure.
-window.moveStagePlayer = function(fromIdx, toIdx) {
+window.moveStagePlayer = function (fromIdx, toIdx) {
     if (fromIdx === toIdx || toIdx < 0 || toIdx >= stageState.unlockedSlots) return;
-    const fields = ['preset', 'customSteps', 'customHeights', 'volume', 'pan', 'pitchShift', 'muted', 'solo', 'energy', 'hitCount', 'vowelState'];
+    const fields = [
+        'preset',
+        'customSteps',
+        'customHeights',
+        'volume',
+        'pan',
+        'pitchShift',
+        'muted',
+        'solo',
+        'energy',
+        'hitCount',
+        'vowelState',
+    ];
     songState.measures.forEach(measure => {
-        const a = measure.slots[fromIdx], b = measure.slots[toIdx];
+        const a = measure.slots[fromIdx],
+            b = measure.slots[toIdx];
         if (!a || !b) return;
-        fields.forEach(key => { const held = a[key]; a[key] = b[key]; b[key] = held; });
+        fields.forEach(key => {
+            const held = a[key];
+            a[key] = b[key];
+            b[key] = held;
+        });
     });
     [fromIdx, toIdx].forEach(idx => {
         audioEngine.setSlotGain(idx, appState.slots[idx].volume);
@@ -302,7 +322,7 @@ window.moveStagePlayer = function(fromIdx, toIdx) {
     refreshAllUI();
 };
 
-window.removeStagePlayer = function(slotIdx) {
+window.removeStagePlayer = function (slotIdx) {
     editStageMeasure();
     const preset = appState.slots[slotIdx]?.preset;
     if (!preset) return;
@@ -353,7 +373,11 @@ function triggerAutoMix(countTarget = 5) {
         const cats = ['drums', 'bass', 'chords', 'melody', 'strings', 'vocals'];
         for (let i = 0; i < clampedTarget; i++) {
             const c = cats[i % cats.length];
-            const p = pickRandom(c, chosen.map(x => x.id)) || INSTRUMENT_PRESETS[i % INSTRUMENT_PRESETS.length];
+            const p =
+                pickRandom(
+                    c,
+                    chosen.map(x => x.id),
+                ) || INSTRUMENT_PRESETS[i % INSTRUMENT_PRESETS.length];
             if (p) chosen.push(p);
         }
     }

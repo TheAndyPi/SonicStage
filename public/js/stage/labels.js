@@ -13,7 +13,7 @@ function createPedestalHUDBadge(i) {
     const badge = document.createElement('div');
     badge.id = `pedestal-hud-${i}`;
     badge.className = 'pedestal-hud absolute z-10';
-    badge.addEventListener('pointerdown', (e) => {
+    badge.addEventListener('pointerdown', e => {
         if (e.button === 0 && e.target.closest('.stage-track-label')) beginPlayerDrag(i, e.clientX, e.clientY);
     });
     badge.addEventListener('pointerup', () => {
@@ -34,7 +34,10 @@ function updatePedestalHUDBadges() {
         const badge = hudBadgeElements[i];
         if (!badge) continue;
         const dragging = appState.draggedPresetId || playerDrag?.active;
-        const visible = i < stageState.unlockedSlots && (slot?.preset || dragging) && (i < 12 || i === appState.hoveredSlotIndex || dragging);
+        const visible =
+            i < stageState.unlockedSlots &&
+            (slot?.preset || dragging) &&
+            (i < 12 || i === appState.hoveredSlotIndex || dragging);
         badge.style.display = visible ? 'block' : 'none';
         if (!visible) continue;
         if (!slot.preset) {

@@ -38,7 +38,7 @@ function drawMiniFFTSpectrum() {
         }
         const db = peak < 0.001 ? -60.0 : Math.min(0.0, 20 * Math.log10(peak));
         dbEl.textContent = db <= -59 ? '-∞ dB' : `${db.toFixed(1)}dB`;
-        dbEl.className = `text-[9px] font-mono font-bold ${db > -1.5 ? 'text-rose-400' : (db > -6 ? 'text-amber-300' : 'text-emerald-400')}`;
+        dbEl.className = `text-[9px] font-mono font-bold ${db > -1.5 ? 'text-rose-400' : db > -6 ? 'text-amber-300' : 'text-emerald-400'}`;
     }
 }
 
@@ -71,9 +71,13 @@ function animateLoop() {
             const measureChanged = songState.heardMeasure !== evt.measure;
             songState.heardMeasure = evt.measure;
             appState.currentStep = evt.step;
-            if (measureChanged && !cinematicState.active && evt.measure.slots !== appState.slots
-                && !document.body.classList.contains('is-dragging-measure')
-                && document.activeElement?.id !== 'song-measure-label') {
+            if (
+                measureChanged &&
+                !cinematicState.active &&
+                evt.measure.slots !== appState.slots &&
+                !document.body.classList.contains('is-dragging-measure') &&
+                document.activeElement?.id !== 'song-measure-label'
+            ) {
                 const index = songState.measures.indexOf(evt.measure);
                 if (index >= 0) selectSongMeasure(index, songState.view === 'song');
             }
@@ -110,7 +114,7 @@ function animateLoop() {
     if (audioEngine.analyser && appState.isPlaying) {
         let sum = 0;
         for (let i = 0; i < 32; i++) sum += audioEngine.fftData[i];
-        avgAudioEnergy = (sum / (32 * 255));
+        avgAudioEnergy = sum / (32 * 255);
     }
 
     floorEQBars.forEach((bar, i) => {
@@ -143,7 +147,8 @@ function animateLoop() {
         }
         const cScale = 1.0 + (reducedStageMotion ? 0 : avgAudioEnergy * 0.18);
         crystalMesh.scale.lerp(_tempVec3.setScalar(cScale), stageEase);
-        crystalMesh.material.emissiveIntensity += (0.12 + avgAudioEnergy * 0.35 - crystalMesh.material.emissiveIntensity) * stageEase;
+        crystalMesh.material.emissiveIntensity +=
+            (0.12 + avgAudioEnergy * 0.35 - crystalMesh.material.emissiveIntensity) * stageEase;
     }
 
     if (bokehParticles) {
@@ -182,10 +187,12 @@ function animateLoop() {
         pillar.towerGroup.position.z += (tz - pillar.towerGroup.position.z) * stageEase;
         pillar.beamCone.visible = !compactStageDevice && !reducedStageMotion;
         pillar.beamCone.rotation.z = appState.isPlaying ? Math.sin(elapsed * 0.22 + idx) * 0.065 : 0;
-        pillar.beamCone.material.opacity += ((0.045 + avgAudioEnergy * 0.07) * (stageTheme === 'light' ? 2.6 : 1) - pillar.beamCone.material.opacity) * stageEase;
+        pillar.beamCone.material.opacity +=
+            ((0.045 + avgAudioEnergy * 0.07) * (stageTheme === 'light' ? 2.6 : 1) - pillar.beamCone.material.opacity) *
+            stageEase;
     });
 
-    tierRiserGroups.forEach((rGroup) => {
+    tierRiserGroups.forEach(rGroup => {
         const tCfg = rGroup.userData.tierConfig;
         const isUnlocked = stageState.unlockedSlots >= tCfg.cumSlots;
         const targetRiserY = isUnlocked ? 0.0 : -4.5;
@@ -259,7 +266,8 @@ function animateLoop() {
                 rig.headGroup.rotation.x = Math.sin(idle * 0.4) * 0.06;
                 rig.headGroup.rotation.y = Math.sin(idle * 0.3) * 0.16;
                 if (rig.category === 'strings') rig.rightArmPivot.rotation.y = -0.25 + Math.sin(idle * 1.3) * 0.1;
-                else if (rig.category === 'melody' && rig.extraAnim.saxGroup) rig.extraAnim.saxGroup.rotation.x = 0.22 + Math.sin(idle * 0.8) * 0.06;
+                else if (rig.category === 'melody' && rig.extraAnim.saxGroup)
+                    rig.extraAnim.saxGroup.rotation.x = 0.22 + Math.sin(idle * 0.8) * 0.06;
                 else if (rig.category === 'drums') rig.rightArmPivot.rotation.x = -0.42 + Math.sin(idle) * 0.08;
                 continue;
             }
@@ -294,7 +302,7 @@ function animateLoop() {
                 rig.rightArmPivot.rotation.x = -0.52 + e * 0.28;
                 if (rig.extraAnim.pianoKeys && idx < 24) {
                     for (let kIdx = 0; kIdx < rig.extraAnim.pianoKeys.length; kIdx++) {
-                        const activeKey = ((kIdx + slot.hitCount) % 3 === 0) && e > 0.1;
+                        const activeKey = (kIdx + slot.hitCount) % 3 === 0 && e > 0.1;
                         rig.extraAnim.pianoKeys[kIdx].position.y = activeKey ? 0.71 - e * 0.018 : 0.71;
                     }
                 }

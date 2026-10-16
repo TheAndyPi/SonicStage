@@ -26,9 +26,11 @@ function updateCameraPresetTarget(mode) {
 
     document.querySelectorAll('.cam-btn').forEach(btn => {
         if (btn.dataset.cam === mode) {
-            btn.className = 'cam-btn px-1.5 sm:px-2 py-0.5 rounded text-[9px] sm:text-[10px] bg-amber-400/20 text-amber-200 transition-colors';
+            btn.className =
+                'cam-btn px-1.5 sm:px-2 py-0.5 rounded text-[9px] sm:text-[10px] bg-amber-400/20 text-amber-200 transition-colors';
         } else {
-            btn.className = 'cam-btn px-1.5 sm:px-2 py-0.5 rounded text-[9px] sm:text-[10px] text-slate-400 hover:text-white transition-colors';
+            btn.className =
+                'cam-btn px-1.5 sm:px-2 py-0.5 rounded text-[9px] sm:text-[10px] text-slate-400 hover:text-white transition-colors';
         }
     });
 }
@@ -38,10 +40,14 @@ function startCinematic() {
     if (!songState.ready || !camera) return;
     if (!cinematicState.active) {
         cinematicState.saved = {
-            view: songState.view, audition: songState.audition,
-            position: camera.position.clone(), target: controls.target.clone(), fov: camera.fov,
-            far: camera.far, fogDensity: scene.fog?.density,
-            controlsEnabled: controls.enabled
+            view: songState.view,
+            audition: songState.audition,
+            position: camera.position.clone(),
+            target: controls.target.clone(),
+            fov: camera.fov,
+            far: camera.far,
+            fogDensity: scene.fog?.density,
+            controlsEnabled: controls.enabled,
         };
         stopSong();
         cinematicState.active = true;
@@ -55,8 +61,16 @@ function startCinematic() {
     audioEngine.init();
     songState.audition = false;
     resetSongTransport(0);
-    Object.assign(cinematicState, { phase: 'intro', paused: false, elapsed: 0, shotElapsed: 0,
-        shotNumber: 0, lastBeat: -1, beatsSinceShot: 0, subject: -1 });
+    Object.assign(cinematicState, {
+        phase: 'intro',
+        paused: false,
+        elapsed: 0,
+        shotElapsed: 0,
+        shotNumber: 0,
+        lastBeat: -1,
+        beatsSinceShot: 0,
+        subject: -1,
+    });
     cinematicState.visits.clear();
     syncStageToMeasure();
     setCinematicShot('opening');
@@ -84,7 +98,7 @@ function exitCinematic() {
     document.body.classList.remove('cinematic-mode');
     document.getElementById('cinematic-overlay').hidden = true;
     setSongView(saved.view);
-    (document.getElementById(saved.view === 'song' ? 'song-showcase' : 'btn-cinematic')).focus({ preventScroll: true });
+    document.getElementById(saved.view === 'song' ? 'song-showcase' : 'btn-cinematic').focus({ preventScroll: true });
 }
 
 function toggleCinematicPause() {
@@ -103,14 +117,20 @@ function toggleCinematicPause() {
 function setCinematicShot(kind) {
     const state = cinematicState;
     const slots = stageState.slots;
-    const candidates = slots.filter(slot => isSlotAudible(slot, slots) &&
-        getSlotSteps(slot).some(step => step !== null && step !== undefined && step !== false));
+    const candidates = slots.filter(
+        slot =>
+            isSlotAudible(slot, slots) &&
+            getSlotSteps(slot).some(step => step !== null && step !== undefined && step !== false),
+    );
     let subject = null;
     if (kind === 'player' && candidates.length) {
         // Rotate through the ensemble, favouring performers with notes in this phrase.
-        const score = slot => (state.visits.get(slot.index) || 0) * 100 +
+        const score = slot =>
+            (state.visits.get(slot.index) || 0) * 100 +
             (slot.index === state.subject ? 50 : 0) -
-            getSlotSteps(slot).slice(appState.currentStep, appState.currentStep + 8).filter(v => v != null && v !== false).length;
+            getSlotSteps(slot)
+                .slice(appState.currentStep, appState.currentStep + 8)
+                .filter(v => v != null && v !== false).length;
         candidates.sort((a, b) => score(a) - score(b) || a.index - b.index);
         subject = candidates[0];
         state.visits.set(subject.index, (state.visits.get(subject.index) || 0) + 1);
@@ -118,13 +138,18 @@ function setCinematicShot(kind) {
     }
     if (kind === 'player' && !subject) kind = 'wide';
     const radius = getActiveTierConfig().outerR;
-    const visibleHeight = Math.max(.25, (window.innerHeight -
-        document.querySelector('.cinema-top').offsetHeight - document.querySelector('.cinema-bottom').offsetHeight) / window.innerHeight);
-    const aspectScale = Math.max(1, 1.45 / camera.aspect, .72 / visibleHeight);
-    const angle = .28 * Math.sin(state.shotNumber * 1.7);
-    const target = new THREE.Vector3(0, .8, 0);
+    const visibleHeight = Math.max(
+        0.25,
+        (window.innerHeight -
+            document.querySelector('.cinema-top').offsetHeight -
+            document.querySelector('.cinema-bottom').offsetHeight) /
+            window.innerHeight,
+    );
+    const aspectScale = Math.max(1, 1.45 / camera.aspect, 0.72 / visibleHeight);
+    const angle = 0.28 * Math.sin(state.shotNumber * 1.7);
+    const target = new THREE.Vector3(0, 0.8, 0);
     let distance = (radius * 1.6 + 8) * aspectScale;
-    let height = radius * .7 + 6;
+    let height = radius * 0.7 + 6;
     let fov = 40;
     if (subject) {
         const ped = pedestalMeshes[subject.index];
@@ -135,7 +160,7 @@ function setCinematicShot(kind) {
         fov = 34;
     } else if (kind === 'overhead') {
         height = (radius * 2 + 13) * aspectScale;
-        distance = radius * .65 + 3;
+        distance = radius * 0.65 + 3;
         fov = 44;
     }
     // Portrait framing can move beyond the normal stage's 120-unit clipping plane.
@@ -144,11 +169,21 @@ function setCinematicShot(kind) {
     state.shot = { kind, target, distance, height, direction, fov, presetId: subject?.preset.id };
     state.shotElapsed = 0;
     state.beatsSinceShot = 0;
-    const labels = { opening: 'THE OPENING / WIDE', player: 'IN FOCUS / ' + (subject ? CATEGORY_META[subject.preset.category].name.toUpperCase() : ''),
-        wide: 'THE ENSEMBLE / WIDE', overhead: 'ABOVE THE STAGE / CRANE', finale: 'THE FINAL NOTE / WIDE' };
+    const labels = {
+        opening: 'THE OPENING / WIDE',
+        player: 'IN FOCUS / ' + (subject ? CATEGORY_META[subject.preset.category].name.toUpperCase() : ''),
+        wide: 'THE ENSEMBLE / WIDE',
+        overhead: 'ABOVE THE STAGE / CRANE',
+        finale: 'THE FINAL NOTE / WIDE',
+    };
     document.getElementById('cinema-shot').textContent = labels[kind];
-    document.getElementById('cinema-subject').textContent = subject ? subject.preset.shortName :
-        kind === 'opening' ? 'The stage is yours.' : kind === 'finale' ? 'A final bow.' : 'Every player. One song.';
+    document.getElementById('cinema-subject').textContent = subject
+        ? subject.preset.shortName
+        : kind === 'opening'
+          ? 'The stage is yours.'
+          : kind === 'finale'
+            ? 'A final bow.'
+            : 'Every player. One song.';
 }
 
 function directCinematicStep(evt) {
@@ -157,8 +192,12 @@ function directCinematicStep(evt) {
     const bar = songState.measures.indexOf(evt.measure);
     const beat = bar * 4 + Math.floor(evt.step / 4);
     const subject = evt.measure.slots[state.subject];
-    const subjectGone = state.shot?.kind === 'player' && (!subject || subject.preset?.id !== state.shot.presetId || !isSlotAudible(subject, evt.measure.slots) ||
-        !getSlotSteps(subject).some(v => v != null && v !== false));
+    const subjectGone =
+        state.shot?.kind === 'player' &&
+        (!subject ||
+            subject.preset?.id !== state.shot.presetId ||
+            !isSlotAudible(subject, evt.measure.slots) ||
+            !getSlotSteps(subject).some(v => v != null && v !== false));
     if (state.lastBeat < 0 || subjectGone) {
         setCinematicShot('player');
     } else if (beat !== state.lastBeat) {
@@ -178,13 +217,24 @@ function updateCinematicUI() {
     const measure = songState.heardMeasure || songState.measures[0];
     const index = Math.max(0, songState.measures.indexOf(measure));
     const complete = state.phase === 'complete';
-    const progress = complete ? 100 : state.phase === 'intro' ? 0 :
-        (index * 16 + appState.currentStep) / (songState.measures.length * 16) * 100;
-    document.getElementById('cinema-status').textContent = state.paused ? 'PAUSED' : complete ? 'PERFORMANCE COMPLETE' :
-        state.phase === 'intro' ? 'SETTING THE SCENE' : measure.label || 'LIVE PERFORMANCE';
-    document.getElementById('cinema-position').textContent = state.phase === 'intro' ? 'From measure 1 · One complete performance' :
-        complete ? `${songState.measures.length} ${songState.measures.length === 1 ? 'measure' : 'measures'} · Thank you for listening` :
-        `MEASURE ${String(index + 1).padStart(2, '0')} / ${String(songState.measures.length).padStart(2, '0')} · BEAT ${Math.floor(appState.currentStep / 4) + 1}`;
+    const progress = complete
+        ? 100
+        : state.phase === 'intro'
+          ? 0
+          : ((index * 16 + appState.currentStep) / (songState.measures.length * 16)) * 100;
+    document.getElementById('cinema-status').textContent = state.paused
+        ? 'PAUSED'
+        : complete
+          ? 'PERFORMANCE COMPLETE'
+          : state.phase === 'intro'
+            ? 'SETTING THE SCENE'
+            : measure.label || 'LIVE PERFORMANCE';
+    document.getElementById('cinema-position').textContent =
+        state.phase === 'intro'
+            ? 'From measure 1 · One complete performance'
+            : complete
+              ? `${songState.measures.length} ${songState.measures.length === 1 ? 'measure' : 'measures'} · Thank you for listening`
+              : `MEASURE ${String(index + 1).padStart(2, '0')} / ${String(songState.measures.length).padStart(2, '0')} · BEAT ${Math.floor(appState.currentStep / 4) + 1}`;
     const pause = document.getElementById('cinema-pause');
     pause.textContent = state.paused ? 'Resume' : 'Pause';
     pause.setAttribute('aria-label', state.paused ? 'Resume showcase' : 'Pause showcase');
@@ -206,10 +256,13 @@ function updateCinematicCamera(dt) {
     const shot = state.shot;
     if (!shot) return;
     const motion = state.reducedMotion ? 0 : Math.min(state.shotElapsed, 16);
-    const angle = shot.direction + motion * (shot.kind === 'player' ? .025 : .018);
-    const distance = shot.distance * (1 - Math.min(motion * .007, .1));
-    cameraTargetPos.set(shot.target.x + Math.sin(angle) * distance, shot.height,
-        shot.target.z + Math.cos(angle) * distance);
+    const angle = shot.direction + motion * (shot.kind === 'player' ? 0.025 : 0.018);
+    const distance = shot.distance * (1 - Math.min(motion * 0.007, 0.1));
+    cameraTargetPos.set(
+        shot.target.x + Math.sin(angle) * distance,
+        shot.height,
+        shot.target.z + Math.cos(angle) * distance,
+    );
     const smoothing = 1 - Math.exp(-dt * (state.reducedMotion ? 5 : 1.9));
     camera.position.lerp(cameraTargetPos, smoothing);
     controls.target.lerp(shot.target, smoothing);
@@ -242,7 +295,9 @@ function beginPlayerDrag(slotIdx, clientX, clientY) {
 }
 
 function setDropTarget(slotIdx) {
-    hudBadgeElements.forEach((badge, idx) => badge?.classList.toggle('is-drop-target', idx === slotIdx && idx !== playerDrag?.from));
+    hudBadgeElements.forEach((badge, idx) =>
+        badge?.classList.toggle('is-drop-target', idx === slotIdx && idx !== playerDrag?.from),
+    );
 }
 
 function finishPlayerDrag(commit) {
@@ -256,14 +311,16 @@ function finishPlayerDrag(commit) {
     const target = appState.hoveredSlotIndex;
     appState.hoveredSlotIndex = -1;
     suppressLabelClick = true;
-    setTimeout(() => { suppressLabelClick = false; }, 0);
+    setTimeout(() => {
+        suppressLabelClick = false;
+    }, 0);
     if (commit && target >= 0 && target !== drag.from) {
         editStageMeasure();
         moveStagePlayer(drag.from, target);
     } else updatePedestalHUDBadges();
 }
 
-window.onStageLabelClick = function(slotIdx) {
+window.onStageLabelClick = function (slotIdx) {
     if (!suppressLabelClick) focusStudioTrack(slotIdx);
 };
 
@@ -327,8 +384,10 @@ function onStagePointerUp(e) {
             if (intersects.length > 0) {
                 const slotIdx = intersects[0].object.userData.slotIndex;
                 if (slotIdx !== undefined && stageState.slots[slotIdx].preset) {
-                    if (typeof studioExperience !== 'undefined' && studioExperience === 'immersive') { editStageMeasure(); openTrackControls(slotIdx); }
-                    else if (stageState.slots !== appState.slots) editStageMeasure();
+                    if (typeof studioExperience !== 'undefined' && studioExperience === 'immersive') {
+                        editStageMeasure();
+                        openTrackControls(slotIdx);
+                    } else if (stageState.slots !== appState.slots) editStageMeasure();
                     else toggleSlotMute(slotIdx);
                 }
             }
@@ -352,7 +411,8 @@ function checkPedestalHover(clientX, clientY) {
         // Update visibility of hovered outer-ring HUD badge without full DOM rebuild
         [prevHover, appState.hoveredSlotIndex].forEach(idx => {
             if (idx >= 12 && idx < stageState.unlockedSlots && hudBadgeElements[idx]) {
-                hudBadgeElements[idx].style.display = (idx === appState.hoveredSlotIndex && stageState.slots[idx].preset) ? 'block' : 'none';
+                hudBadgeElements[idx].style.display =
+                    idx === appState.hoveredSlotIndex && stageState.slots[idx].preset ? 'block' : 'none';
             }
         });
     }

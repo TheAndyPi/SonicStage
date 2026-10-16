@@ -1,43 +1,145 @@
 # SonicStage
 
-A colorful music playground with a sound browser, editable 16-step beats, a song arrangement, and a live 3D stage.
+SonicStage is a music studio that runs entirely in the browser. You pick sounds from a library of 100 synthesized instruments, program them on a 16-step beat grid, arrange bars into a full song, and watch a band of 3D performers play it live on stage.
 
-## Run
+Everything happens on the client. Sound is synthesized with the Web Audio API, the stage is rendered with Three.js, and the song generator composes locally, so there is no backend and no API key.
+
+## Features
+
+- **Two views of one song.** _Immersive_ is a full-screen stage with a sound browser and compact transport. _Pro_ adds the arrangement sheet, harmony controls, recording, and the effects rack. Switching views keeps your work.
+- **100 instruments** across drums, bass, chords, melody, strings and horns, and vocals, all synthesized in real time.
+- **16-step beat editor** with per-track mute, solo, gain, pan, octave, shuffle, and reset.
+- **Song arrangement** of up to 1,024 independent bars, with copy, reorder, and labels.
+- **Song generator** that writes editable 8-, 16-, or 32-bar songs in House, Lo-fi, Funk, or Cinematic style.
+- **Effects rack** with master EQ, filter, drive, reverb, delay, swing, compression, and master level.
+- **Recording** of the master output, downloaded in the browser's supported audio format.
+- **Save and open** songs as SonicStage JSON files. Sessions also autosave in the browser, with undo and redo for the current visit.
+- **Light and dark themes**, including the 3D stage. Motion follows the system's reduced-motion setting.
+
+## Quick start
+
+You need [Node.js](https://nodejs.org/) 18 or newer and Python 3 (used only for the local web server).
 
 ```sh
+npm install
 npm run dev
 ```
 
-Open **http://127.0.0.1:4173**. The checked-in app works without installing packages. You can also open `sonicstage_3d_interactive_instrument_loop_station.html` directly; serving locally gives browser storage and audio a consistent origin.
+Then open <http://127.0.0.1:4173>.
 
-## Session controls
+The compiled CSS is committed, so you can also serve the `public/` folder with any static file server without installing anything.
 
-- **Immersive** is the default view: a full-width stage, player controls, a horizontal sound browser, and a compact floating transport. Tap a player to adjust its sound. **Pro** opens the full studio with arrangement, harmony, recording, and effects controls. Both views edit the same song; switching preserves your work.
-- The sun/moon button switches between neutral light and dark themes, including the 3D stage. Theme and view preferences are remembered.
-- **Sounds** and **Beats** slide their panels in and out. Immersive shows one drawer at a time; Pro allows both. Escape closes the current Immersive drawer.
-- **New**, **Open**, **Continue**, and **Generate** are on the start page. Click the SonicStage wordmark to return there.
-- **Generate** composes an editable 8-, 16-, or 32-bar song in House, Lo-fi, Funk, or Cinematic style. Composition runs locally and does not require an API key.
-- **Save song** downloads a SonicStage JSON file. Sessions also autosave in the current browser. Undo/redo cover edits and session replacements during the current visit.
-- Drag the border beside **Sounds** or above the **Beat editor** to resize. In Immersive and on phones, drag above Sounds to change its height. Double-click a divider or press Home to reset; focused dividers respond to arrow keys. Pro panel sizes are remembered separately for phones and desktops.
-- Click a sound to add/remove it in the selected bar. Click a stage label to focus its track. Mute, solo, gain, pan, octave, shuffle, and reset controls sit beside the beat grid. Click a track name to open its full controls, including pan and pattern tools on phones.
-- Click beat steps to toggle them; Shift-click cycles note or drum variations. Arrow keys move between focused steps and tracks.
-- Space plays/pauses, Enter plays from the beginning, 0 stops, and `?` opens shortcuts, including when buttons, dropdowns, sliders, or beat steps have focus. Command/Control-S saves; Command/Control-Z undoes; Shift-Command/Control-Z redoes. Text and number fields retain normal typing and text undo; dialogs retain their native keyboard controls.
-- **FX rack** contains master EQ, filter, drive, reverb, delay, swing, compression, and master level. **Record** captures the live master while you play; stopping the recording downloads the browser's supported audio format.
+## Using the studio
 
-WebGL and Web Audio are required for the stage and playback. Fonts load from Google Fonts; JavaScript and compiled utility CSS are served locally. Motion follows the device's reduced-motion setting.
+| Action                                | How                                                                       |
+| ------------------------------------- | ------------------------------------------------------------------------- |
+| Play / pause                          | <kbd>Space</kbd>                                                          |
+| Play from the beginning               | <kbd>Enter</kbd>                                                          |
+| Stop                                  | <kbd>0</kbd>                                                              |
+| Show all shortcuts                    | <kbd>?</kbd>                                                              |
+| Save song                             | <kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>S</kbd>                               |
+| Undo / redo                           | <kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>Z</kbd>, add <kbd>Shift</kbd> to redo |
+| Cycle a step's note or drum variation | <kbd>Shift</kbd>-click the step                                           |
+| Move between steps and tracks         | Arrow keys while a step is focused                                        |
 
-The 3D canvas fills the frame behind the controls. The camera and player labels follow the clear workspace above/beside the panels, so resizing or hiding a panel changes the composition without exposing a blank strip.
+Some other things worth knowing:
+
+- Click a sound to add it to (or remove it from) the selected bar. Click a performer's label on stage to focus that track, or a track name in the beat editor to open its full controls.
+- Drag the border beside **Sounds** or above the **Beat editor** to resize them. Double-click a divider or press <kbd>Home</kbd> to reset it.
+- Click the SonicStage wordmark to return to the start page, where **New**, **Open**, **Continue**, and **Generate** live.
+- Shortcuts work while buttons, sliders, and beat steps have focus. Text fields keep their normal typing and undo behavior.
+
+SonicStage needs a browser with WebGL and Web Audio, which covers all current desktop and mobile browsers.
+
+## Project structure
+
+```text
+SonicStage/
+├── public/                     # The deployable site; served as-is
+│   ├── index.html              # Page markup and script load order
+│   ├── favicon.svg
+│   ├── images/brand-mark.svg   # Logo
+│   ├── css/
+│   │   ├── tailwind.css        # Generated by `npm run build`; do not edit
+│   │   ├── base.css            # Core layout and component styles
+│   │   ├── workspace.css       # Studio panels, beat editor, arrangement, start page
+│   │   └── theme.css           # Light/dark theme, Immersive view, panel animation
+│   ├── js/
+│   │   ├── music/
+│   │   │   ├── presets.js          # Keys, scales, tempo curve, and the 100 instrument presets
+│   │   │   ├── app-state.js        # Track slots and stage capacity
+│   │   │   ├── song.js             # Song arrangement, autosave, import/export
+│   │   │   ├── audio-engine.js     # Web Audio synthesis, mixer, and effects
+│   │   │   └── song-generator.js   # Procedural song composition
+│   │   ├── stage/
+│   │   │   ├── scene.js            # Three.js scene, lighting, and adaptive stage
+│   │   │   ├── performers.js       # 3D musicians and instrument rigs
+│   │   │   ├── camera.js           # Camera presets, orbit controls, picking
+│   │   │   ├── labels.js           # Floating performer labels
+│   │   │   └── render-loop.js      # Spectrum analyzer and animation loop
+│   │   ├── ui/
+│   │   │   ├── tracks.js           # Track assignment and per-track controls
+│   │   │   ├── sequencer.js        # Sound palette, drag-and-drop, beat grid
+│   │   │   ├── workspace.js        # Undo/redo, shortcuts, resizable panels, dialogs
+│   │   │   └── views.js            # Theme switch, Immersive/Pro views, drawers
+│   │   └── main.js                 # Startup and event wiring
+│   └── vendor/                 # Pinned Three.js r128 and OrbitControls
+├── src/tailwind.css            # Tailwind input
+├── tests/                      # Node test suites
+├── tailwind.config.cjs
+├── vercel.json
+└── package.json
+```
+
+### How the code fits together
+
+The app has no bundler. Each file in `public/js/` is a plain `<script>`, and `index.html` loads them in a fixed order. Classic scripts share one global scope, so later files can use functions and state declared in earlier ones. Files mostly declare things; the actual startup happens in `main.js` when the page finishes loading.
+
+If you add a script, add it to `index.html` in dependency order. The tests read the same list from `index.html`, so they stay in sync automatically.
+
+Styling comes from two layers: Tailwind utility classes in the markup (compiled into `public/css/tailwind.css`), and the hand-written stylesheets in `public/css/`, which load after Tailwind and take precedence.
 
 ## Development
 
+| Command                | What it does                                          |
+| ---------------------- | ----------------------------------------------------- |
+| `npm run dev`          | Serves `public/` at <http://127.0.0.1:4173>           |
+| `npm run build`        | Compiles Tailwind into `public/css/tailwind.css`      |
+| `npm test`             | Runs both test suites                                 |
+| `npm run format`       | Formats HTML, CSS, JS, and config files with Prettier |
+| `npm run format:check` | Checks formatting without changing files              |
+
+Run `npm run build` after adding or changing Tailwind classes, and commit the regenerated `public/css/tailwind.css` so the site still works without a build step. If a class only ever appears in markup generated at runtime, add it to the `safelist` in `tailwind.config.cjs`.
+
+### Tests
+
+The tests run in plain Node with no browser:
+
+- `tests/song-generator.test.cjs` generates 144 songs across every style, length, energy, and seed combination. It checks that seeds are deterministic, pitches stay in the scale, songs have distinct sections and dynamics, and that every generated song reopens through the real importer.
+- `tests/workspace.test.cjs` runs the real camera-framing code through 150 layout changes (desktop, portrait, landscape, and ultrawide) to check projection, clipping, and drawing-buffer reuse. It also checks keyboard shortcut routing across focused buttons, sliders, text fields, and dialogs.
+
+## Deploying to Vercel
+
+The repository is ready to deploy as a static site. `vercel.json` sets the build command (`npm run build`) and serves the `public/` folder, with no framework preset.
+
+**From the Vercel dashboard:** push this repository to GitHub, GitLab, or Bitbucket, then choose **Add New → Project** in Vercel and import it. The settings in `vercel.json` are picked up automatically, so you can deploy with the defaults.
+
+**From the command line:**
+
 ```sh
-npm ci
-npm run build:css
-npm test
+npm install --global vercel
+vercel          # create a preview deployment
+vercel --prod   # deploy to production
 ```
 
-The source app remains in the original HTML file. `studio.css` and `studio.js` contain workspace interactions; `playful.css` and `experience.js` contain the theme, view switch, and animated panels. `brand-mark.svg` is the shared logo and favicon. `song-generator.js` contains procedural composition. Run `build:css` after changing utility classes. `vendor/` contains the pinned Three.js r128 build, OrbitControls, and generated utility CSS; third-party licenses are preserved in those files.
+The deployment also:
 
-The generator suite checks 144 combinations of style, length, energy, and seed, including determinism, harmony, section development, dynamics, independent bars, validation, and import round trips. Desktop and 320/390-pixel phone layouts were reviewed in Chrome, including new/open, playback, undo/redo, resize, and restore workflows.
+- Serves clean URLs (no `.html` suffixes).
+- Permanently redirects the old `/sonicstage_3d_interactive_instrument_loop_station.html` address to `/`.
+- Sends basic security headers and caches the pinned files in `vendor/` for a week.
 
-Workspace regressions exercise 150 camera layout changes, projection placement, clipping limits, zero-size recovery, drawing-buffer reuse, and shortcut routing across control and text-field focus. Portrait, landscape, and short ultrawide layouts were also checked in Chrome for matching canvas/buffer dimensions and active WebGL rendering.
+## Credits
+
+- [Three.js](https://threejs.org/) r128 and its OrbitControls (MIT). License headers are kept in `public/vendor/`.
+- [Tailwind CSS](https://tailwindcss.com/) for utility classes.
+- Fonts: [DM Sans](https://fonts.google.com/specimen/DM+Sans), [Manrope](https://fonts.google.com/specimen/Manrope), and [IBM Plex Mono](https://fonts.google.com/specimen/IBM+Plex+Mono), loaded from Google Fonts.

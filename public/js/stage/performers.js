@@ -13,7 +13,7 @@ function buildBaseMusicianFigure(accentMat, jacketMat, detailed = true) {
         rightArmPivot: new THREE.Group(),
         leftHand: null,
         rightHand: null,
-        extraAnim: {}
+        extraAnim: {},
     };
 
     const leftLeg = new THREE.Mesh(g.leg, sharedStudioMaterials.matteBlack);
@@ -23,11 +23,12 @@ function buildBaseMusicianFigure(accentMat, jacketMat, detailed = true) {
     const rightLeg = new THREE.Mesh(g.leg, sharedStudioMaterials.matteBlack);
     rightLeg.position.set(0.11, 0.21, -0.14);
     group.add(rightLeg);
-    if (detailed) [-0.11, 0.11].forEach(x => {
-        const shoe = new THREE.Mesh(g.shoe, sharedStudioMaterials.matteBlack);
-        shoe.position.set(x, 0.045, -0.10);
-        group.add(shoe);
-    });
+    if (detailed)
+        [-0.11, 0.11].forEach(x => {
+            const shoe = new THREE.Mesh(g.shoe, sharedStudioMaterials.matteBlack);
+            shoe.position.set(x, 0.045, -0.1);
+            group.add(shoe);
+        });
 
     rig.bodyPivot.position.set(0, 0.42, -0.14);
     group.add(rig.bodyPivot);
@@ -36,7 +37,7 @@ function buildBaseMusicianFigure(accentMat, jacketMat, detailed = true) {
     torso.position.set(0, 0.25, 0);
     rig.bodyPivot.add(torso);
     const shirt = new THREE.Mesh(g.shirt, sharedStudioMaterials.ivoryKey);
-    shirt.position.set(0, 0.30, 0.18);
+    shirt.position.set(0, 0.3, 0.18);
     if (detailed) rig.bodyPivot.add(shirt);
 
     const collar = new THREE.Mesh(g.collar, accentMat);
@@ -69,17 +70,18 @@ function buildBaseMusicianFigure(accentMat, jacketMat, detailed = true) {
     headband.position.set(0, 0.18, 0);
     if (detailed) rig.headGroup.add(headband);
 
-    if (detailed) [-0.19, 0.19].forEach(xPos => {
-        const cup = new THREE.Mesh(g.earcup, sharedStudioMaterials.matteBlack);
-        cup.rotation.z = Math.PI / 2;
-        cup.position.set(xPos, 0.16, 0);
-        rig.headGroup.add(cup);
+    if (detailed)
+        [-0.19, 0.19].forEach(xPos => {
+            const cup = new THREE.Mesh(g.earcup, sharedStudioMaterials.matteBlack);
+            cup.rotation.z = Math.PI / 2;
+            cup.position.set(xPos, 0.16, 0);
+            rig.headGroup.add(cup);
 
-        const cupRing = new THREE.Mesh(g.cupRing, accentMat);
-        cupRing.rotation.z = Math.PI / 2;
-        cupRing.position.set(xPos, 0.16, 0);
-        rig.headGroup.add(cupRing);
-    });
+            const cupRing = new THREE.Mesh(g.cupRing, accentMat);
+            cupRing.rotation.z = Math.PI / 2;
+            cupRing.position.set(xPos, 0.16, 0);
+            rig.headGroup.add(cupRing);
+        });
 
     rig.leftArmPivot.position.set(-0.23, 0.45, 0);
     rig.rightArmPivot.position.set(0.23, 0.45, 0);
@@ -118,7 +120,9 @@ function rebuildPedestalPerformer(slotIndex) {
     const category = slot.preset?.category || null;
     const audible = isSlotAudible(slot, stageState.slots);
     ped.ringMesh.material = category
-        ? (audible ? sharedCategoryMaterials[category].activeRing : sharedStudioMaterials.mutedRing)
+        ? audible
+            ? sharedCategoryMaterials[category].activeRing
+            : sharedStudioMaterials.mutedRing
         : sharedStudioMaterials.inactiveRing;
     if (category) ped.waveMesh.material.color.setHex(CATEGORY_META[category].hex);
     if (ped.visualCategory === category) return;
@@ -180,7 +184,7 @@ function rebuildPedestalPerformer(slotIndex) {
         if (slotIndex < 24) {
             const lugs = new THREE.InstancedMesh(g.drumLug, sharedStudioMaterials.chrome, 8);
             for (let n = 0; n < 8; n++) {
-                const a = n / 8 * Math.PI * 2;
+                const a = (n / 8) * Math.PI * 2;
                 _tempDummy.position.set(Math.cos(a) * 0.269, Math.sin(a) * 0.269, 0);
                 _tempDummy.rotation.set(Math.PI / 2, 0, 0);
                 _tempDummy.scale.setScalar(1);
@@ -201,15 +205,15 @@ function rebuildPedestalPerformer(slotIndex) {
         rig.extraAnim.kickHead = kickHead;
 
         const snareStand = new THREE.Mesh(g.snareStand, sharedStudioMaterials.chrome);
-        snareStand.position.set(-0.26, 0.26, 0.20);
+        snareStand.position.set(-0.26, 0.26, 0.2);
         musicianGroup.add(snareStand);
 
         const snareShell = new THREE.Mesh(g.snareShell, sharedStudioMaterials.chrome);
-        snareShell.position.set(-0.26, 0.54, 0.20);
+        snareShell.position.set(-0.26, 0.54, 0.2);
         musicianGroup.add(snareShell);
 
         const snareHead = new THREE.Mesh(g.snareHead, sharedStudioMaterials.drumheadWhite);
-        snareHead.position.set(-0.26, 0.60, 0.20);
+        snareHead.position.set(-0.26, 0.6, 0.2);
         musicianGroup.add(snareHead);
 
         const cymbalStand = new THREE.Mesh(g.cymbalStand, sharedStudioMaterials.chrome);
@@ -235,7 +239,6 @@ function rebuildPedestalPerformer(slotIndex) {
 
         rig.leftArmPivot.rotation.set(-0.35, 0.18, 0);
         rig.rightArmPivot.rotation.set(-0.45, -0.22, 0);
-
     } else if (cat === 'bass') {
         // 2. BASS: 4-String Electric Bass + Twin-12" Amp Stack
         const ampCab = new THREE.Mesh(g.ampCab, sharedStudioMaterials.matteBlack);
@@ -307,7 +310,6 @@ function rebuildPedestalPerformer(slotIndex) {
 
         rig.leftArmPivot.rotation.set(-0.55, -0.35, -0.2);
         rig.rightArmPivot.rotation.set(-0.4, 0.35, 0.1);
-
     } else if (cat === 'chords') {
         // 3. CHORDS: Studio Electric Piano with Moving Keys
         const synthStandGroup = new THREE.Group();
@@ -349,7 +351,8 @@ function rebuildPedestalPerformer(slotIndex) {
         }
 
         rig.extraAnim.pianoKeys = [];
-        const distantKeys = slotIndex >= 24 ? new THREE.InstancedMesh(g.whiteKey, sharedStudioMaterials.ivoryKey, 9) : null;
+        const distantKeys =
+            slotIndex >= 24 ? new THREE.InstancedMesh(g.whiteKey, sharedStudioMaterials.ivoryKey, 9) : null;
         for (let k = 0; k < 9; k++) {
             if (distantKeys) {
                 _tempDummy.position.set((k - 4) * 0.082, 0.71, -0.03);
@@ -378,7 +381,6 @@ function rebuildPedestalPerformer(slotIndex) {
         musicianGroup.add(synthStandGroup);
         rig.leftArmPivot.rotation.set(-0.52, 0.1, 0);
         rig.rightArmPivot.rotation.set(-0.52, -0.1, 0);
-
     } else if (cat === 'melody') {
         // 4. MELODY: Sculpted Brass Tenor Saxophone
         const saxGroup = new THREE.Group();
@@ -390,7 +392,7 @@ function rebuildPedestalPerformer(slotIndex) {
         saxGroup.add(saxBody);
 
         const saxBow = new THREE.Mesh(g.saxBow, sharedStudioMaterials.brass);
-        saxBow.position.set(0, -0.20, 0.075);
+        saxBow.position.set(0, -0.2, 0.075);
         saxBow.rotation.y = Math.PI / 2;
         saxBow.rotation.x = Math.PI;
         saxGroup.add(saxBow);
@@ -421,7 +423,6 @@ function rebuildPedestalPerformer(slotIndex) {
 
         rig.leftArmPivot.rotation.set(-0.68, 0.32, 0);
         rig.rightArmPivot.rotation.set(-0.52, -0.28, 0);
-
     } else if (cat === 'strings') {
         // 5. STRINGS & HORNS: Mahogany Concert Cello + Moving Horsehair Bow
         const celloGroup = new THREE.Group();
@@ -436,7 +437,7 @@ function rebuildPedestalPerformer(slotIndex) {
         fingerboard.position.set(0, 0.26, 0.045);
         celloGroup.add(fingerboard);
         const celloBridge = new THREE.Mesh(g.celloBridge, sharedStudioMaterials.mapleWood);
-        celloBridge.position.set(0, -0.10, 0.064);
+        celloBridge.position.set(0, -0.1, 0.064);
         celloGroup.add(celloBridge);
         if (slotIndex < 24) {
             celloGroup.add(new THREE.LineSegments(g.celloStrings, sharedStudioMaterials.instrumentWire));
@@ -457,7 +458,6 @@ function rebuildPedestalPerformer(slotIndex) {
 
         rig.leftArmPivot.rotation.set(-0.65, 0.25, 0);
         rig.rightArmPivot.rotation.set(-0.48, -0.25, 0);
-
     } else if (cat === 'vocals') {
         // 6. VOCALS: Brass Studio Condenser Microphone + Shockmount + Pop Filter
         const micStandGroup = new THREE.Group();
@@ -482,15 +482,15 @@ function rebuildPedestalPerformer(slotIndex) {
 
         const micGrille = new THREE.Mesh(g.micGrille, sharedStudioMaterials.chrome);
         micGrille.scale.y = 1.25;
-        micGrille.position.set(0, 1.10, -0.02);
+        micGrille.position.set(0, 1.1, -0.02);
         micStandGroup.add(micGrille);
 
         const popRim = new THREE.Mesh(g.popRim, accentMat);
-        popRim.position.set(0, 1.07, -0.10);
+        popRim.position.set(0, 1.07, -0.1);
         micStandGroup.add(popRim);
 
         const popScreen = new THREE.Mesh(g.popScreen, sharedStudioMaterials.popFilterDark);
-        popScreen.position.set(0, 1.07, -0.10);
+        popScreen.position.set(0, 1.07, -0.1);
         micStandGroup.add(popScreen);
 
         musicianGroup.add(micStandGroup);

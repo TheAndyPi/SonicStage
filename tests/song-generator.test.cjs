@@ -9,7 +9,7 @@ assert(start > 0 && end > start, 'Existing song validator and sound library are 
 const context = vm.createContext({
     structuredClone,
     window: { matchMedia: () => ({ matches: false }) },
-    document: { getElementById: id => id === 'project-title' ? { value: 'Current song' } : null },
+    document: { getElementById: id => (id === 'project-title' ? { value: 'Current song' } : null) },
 });
 // Exercise the actual app's presets, state model, and import validator. No DOM,
 // renderer, or audio device is needed to validate composition and persistence.
@@ -33,31 +33,54 @@ for (const style of styles) {
                 const song = context.generateSong(options);
                 assert.equal(song.measures.length, bars);
                 assert.equal(song.loop, false, 'A generated song has a complete ending');
-                assert.equal(JSON.stringify(song), JSON.stringify(context.generateSong(options)), 'Seeds reproduce a composition');
-                assert.equal(vm.runInContext('JSON.stringify(songDocument())', context), originalSong, 'Generating does not replace the current song');
+                assert.equal(
+                    JSON.stringify(song),
+                    JSON.stringify(context.generateSong(options)),
+                    'Seeds reproduce a composition',
+                );
+                assert.equal(
+                    vm.runInContext('JSON.stringify(songDocument())', context),
+                    originalSong,
+                    'Generating does not replace the current song',
+                );
                 const sections = new Set(song.measures.map(measure => measure.label.split(' · ')[0]));
                 assert(sections.size >= 6, 'The arrangement has distinct musical sections');
                 const maxActivity = Math.max(...song.measures.map(activity));
                 assert(activity(song.measures[0]) < maxActivity, 'The arrangement opens with space');
                 assert(activity(song.measures.at(-1)) < maxActivity, 'The arrangement resolves to an ending');
-                const patterns = new Set(song.measures.map(measure => JSON.stringify(measure.slots.map(slot => slot.steps))));
+                const patterns = new Set(
+                    song.measures.map(measure => JSON.stringify(measure.slots.map(slot => slot.steps))),
+                );
                 assert(patterns.size >= Math.min(6, bars), 'Measures develop through the song');
                 const mixLevels = new Set();
                 const ensemble = new Map();
                 for (const measure of song.measures) {
                     assert(measure.slots.length > 0 && measure.slots.length <= 6);
                     const uniquePresets = new Set(measure.slots.map(slot => slot.presetId));
-                    assert.equal(uniquePresets.size, measure.slots.length, 'Each track remains visible in the arrangement');
+                    assert.equal(
+                        uniquePresets.size,
+                        measure.slots.length,
+                        'Each track remains visible in the arrangement',
+                    );
                     for (const slot of measure.slots) {
-                        if (ensemble.has(slot.index)) assert.equal(slot.presetId, ensemble.get(slot.index), 'Track identity stays consistent');
+                        if (ensemble.has(slot.index))
+                            assert.equal(slot.presetId, ensemble.get(slot.index), 'Track identity stays consistent');
                         ensemble.set(slot.index, slot.presetId);
                         mixLevels.add(slot.volume);
                         assert.equal(slot.steps.length, 16);
-                        assert(slot.steps.some(event => event !== null), 'Empty tracks are omitted');
+                        assert(
+                            slot.steps.some(event => event !== null),
+                            'Empty tracks are omitted',
+                        );
                         slot.steps.forEach((event, index) => {
                             assert.equal(slot.heights[index] > 0, event !== null);
                             const notes = typeof event === 'number' ? [event] : Array.isArray(event) ? event : [];
-                            notes.forEach(note => assert(allowedChroma.has(((note % 12) + 12) % 12), 'Generated pitches use the app source scale'));
+                            notes.forEach(note =>
+                                assert(
+                                    allowedChroma.has(((note % 12) + 12) % 12),
+                                    'Generated pitches use the app source scale',
+                                ),
+                            );
                         });
                     }
                 }
@@ -80,4 +103,6 @@ for (const options of [{ style: 'unknown' }, { bars: 0 }, { bars: 17 }, { energy
 const first = context.generateSong({ seed: 'one' });
 const second = context.generateSong({ seed: 'two' });
 assert.notEqual(JSON.stringify(first), JSON.stringify(second), 'A new seed makes a different song');
-console.log(`Passed: ${generated} generated songs, deterministic seeds, musical sections, harmony, dynamics, import round trips, and no state mutation.`);
+console.log(
+    `Passed: ${generated} generated songs, deterministic seeds, musical sections, harmony, dynamics, import round trips, and no state mutation.`,
+);

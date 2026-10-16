@@ -37,7 +37,10 @@ function stageColor(hex) {
 }
 
 function getStageSpectrumColor(index) {
-    return stageSpectrumColors[Math.floor(index / 64 * stageSpectrumColors.length) % stageSpectrumColors.length] || _tempColor.setHex(0xffffff);
+    return (
+        stageSpectrumColors[Math.floor((index / 64) * stageSpectrumColors.length) % stageSpectrumColors.length] ||
+        _tempColor.setHex(0xffffff)
+    );
 }
 
 // Retheme pooled materials in place; existing performers and animations keep their identity.
@@ -52,7 +55,9 @@ function applyStageTheme(theme = 'light') {
         scene.fog.density = light ? 0.0045 : 0.009;
     }
     renderer.toneMappingExposure = light ? 1.08 : 0.96;
-    const recolor = (material, hex) => { if (material?.color) material.color.copy(neutral(hex)); };
+    const recolor = (material, hex) => {
+        if (material?.color) material.color.copy(neutral(hex));
+    };
     const surfaceColors = light
         ? { floor: 0xf2f2f2, inner: 0xffffff, riser: 0xececec, seam: 0xa7a7a7 }
         : { floor: 0x111111, inner: 0x292929, riser: 0x222222, seam: 0x535353 };
@@ -62,7 +67,10 @@ function applyStageTheme(theme = 'light') {
     sharedStudioMaterials.obsidianDeck.needsUpdate = true;
     ['inner', 'riser'].forEach(key => {
         const material = stageThemeSurfaces[key];
-        if (material) { material.map = null; material.needsUpdate = true; }
+        if (material) {
+            material.map = null;
+            material.needsUpdate = true;
+        }
     });
     recolor(sharedStudioMaterials.stageTrim, light ? 0x5f646d : 0x51535a);
     recolor(sharedStudioMaterials.inactiveRing, light ? 0x6c7079 : 0x42454b);
@@ -73,7 +81,7 @@ function applyStageTheme(theme = 'light') {
     recolor(sharedPedestalGeometries?.baseMat, light ? 0x9a9ea7 : 0x303136);
     if (bokehParticles) {
         bokehParticles.material.color.copy(neutral(light ? 0x8c83cc : 0xc8c3e7));
-        bokehParticles.material.opacity = light ? 0.10 : 0.18;
+        bokehParticles.material.opacity = light ? 0.1 : 0.18;
     }
     if (stageThemeLights.hemi) {
         stageThemeLights.hemi.color.setHex(0xffffff);
@@ -95,7 +103,7 @@ function applyStageTheme(theme = 'light') {
         if (!materials) return;
         materials.accent.color.copy(color);
         materials.accent.emissive.copy(color);
-        materials.accent.emissiveIntensity = light ? 0.025 : 0.10;
+        materials.accent.emissiveIntensity = light ? 0.025 : 0.1;
         materials.jacket.color.copy(color).multiplyScalar(light ? 0.65 : 0.48);
         materials.activeRing.color.copy(color);
         materials.activeRing.emissive.copy(color);
@@ -129,9 +137,14 @@ function getStageViewport() {
     const rect = container.getBoundingClientRect();
     const clear = cinematicState.active ? rect : document.getElementById('pedestal-hud-layer').getBoundingClientRect();
     return {
-        left: rect.left, top: rect.top, width: Math.round(rect.width), height: Math.round(rect.height),
-        clearLeft: clear.left - rect.left, clearTop: clear.top - rect.top,
-        clearWidth: clear.width, clearHeight: clear.height
+        left: rect.left,
+        top: rect.top,
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        clearLeft: clear.left - rect.left,
+        clearTop: clear.top - rect.top,
+        clearWidth: clear.width,
+        clearHeight: clear.height,
     };
 }
 
@@ -139,7 +152,14 @@ function getStageViewport() {
 function frameStageViewport(viewport) {
     const clearWidth = Math.max(160, viewport.clearWidth);
     const clearHeight = Math.max(120, viewport.clearHeight);
-    camera.setViewOffset(clearWidth, clearHeight, -viewport.clearLeft, -viewport.clearTop, viewport.width, viewport.height);
+    camera.setViewOffset(
+        clearWidth,
+        clearHeight,
+        -viewport.clearLeft,
+        -viewport.clearTop,
+        viewport.width,
+        viewport.height,
+    );
 }
 
 function stageFraming(aspect) {
@@ -147,30 +167,38 @@ function stageFraming(aspect) {
 }
 
 function updateStageCameraRange() {
-    const distance = Math.max(camera.position.distanceTo(controls.target), cameraTargetPos.distanceTo(cameraLookAtTarget));
+    const distance = Math.max(
+        camera.position.distanceTo(controls.target),
+        cameraTargetPos.distanceTo(cameraLookAtTarget),
+    );
     controls.maxDistance = Math.max(85, distance * 1.25);
     camera.far = Math.max(120, distance + getActiveTierConfig().outerR * 4 + 30);
 }
 
 function setStagePointer(clientX, clientY) {
     const rect = renderer.domElement.getBoundingClientRect();
-    mouseNDC.set(((clientX - rect.left) / rect.width) * 2 - 1,
-        -((clientY - rect.top) / rect.height) * 2 + 1);
+    mouseNDC.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
 }
 
 // A shared bevel gives the miniature hardware a machined edge without external assets.
 function createBeveledBoxGeometry(width, height, depth, radius = 0.015) {
     const shape = new THREE.Shape();
-    const x = -width / 2 + radius, y = -height / 2 + radius;
-    const w = width - radius * 2, h = height - radius * 2;
+    const x = -width / 2 + radius,
+        y = -height / 2 + radius;
+    const w = width - radius * 2,
+        h = height - radius * 2;
     shape.moveTo(x, y);
     shape.lineTo(x + w, y);
     shape.lineTo(x + w, y + h);
     shape.lineTo(x, y + h);
     shape.closePath();
     const geometry = new THREE.ExtrudeGeometry(shape, {
-        depth: Math.max(0.004, depth - radius * 2), bevelEnabled: true,
-        bevelSegments: 2, steps: 1, bevelSize: radius, bevelThickness: radius
+        depth: Math.max(0.004, depth - radius * 2),
+        bevelEnabled: true,
+        bevelSegments: 2,
+        steps: 1,
+        bevelSize: radius,
+        bevelThickness: radius,
     });
     geometry.translate(0, 0, -Math.max(0.004, depth - radius * 2) / 2);
     return geometry;
@@ -179,26 +207,31 @@ function createBeveledBoxGeometry(width, height, depth, radius = 0.015) {
 function createInstrumentBodyGeometry(kind) {
     const shape = new THREE.Shape();
     if (kind === 'bass') {
-        shape.moveTo(0.10, 0.035);
+        shape.moveTo(0.1, 0.035);
         shape.bezierCurveTo(0.17, 0.08, 0.17, 0.18, 0.08, 0.16);
-        shape.bezierCurveTo(0.01, 0.14, 0.03, 0.08, -0.04, 0.10);
-        shape.bezierCurveTo(-0.23, 0.20, -0.27, -0.12, -0.08, -0.15);
+        shape.bezierCurveTo(0.01, 0.14, 0.03, 0.08, -0.04, 0.1);
+        shape.bezierCurveTo(-0.23, 0.2, -0.27, -0.12, -0.08, -0.15);
         shape.bezierCurveTo(0.05, -0.19, 0.18, -0.12, 0.11, -0.04);
-        shape.bezierCurveTo(0.08, -0.02, 0.08, 0.01, 0.10, 0.035);
+        shape.bezierCurveTo(0.08, -0.02, 0.08, 0.01, 0.1, 0.035);
     } else {
         shape.moveTo(0, 0.31);
-        shape.bezierCurveTo(0.20, 0.33, 0.22, 0.14, 0.10, 0.08);
+        shape.bezierCurveTo(0.2, 0.33, 0.22, 0.14, 0.1, 0.08);
         shape.bezierCurveTo(0.075, 0.04, 0.075, -0.015, 0.15, -0.05);
         shape.bezierCurveTo(0.31, -0.14, 0.23, -0.37, 0, -0.36);
         shape.bezierCurveTo(-0.23, -0.37, -0.31, -0.14, -0.15, -0.05);
-        shape.bezierCurveTo(-0.075, -0.015, -0.075, 0.04, -0.10, 0.08);
-        shape.bezierCurveTo(-0.22, 0.14, -0.20, 0.33, 0, 0.31);
+        shape.bezierCurveTo(-0.075, -0.015, -0.075, 0.04, -0.1, 0.08);
+        shape.bezierCurveTo(-0.22, 0.14, -0.2, 0.33, 0, 0.31);
     }
     shape.closePath();
     const depth = kind === 'bass' ? 0.055 : 0.085;
     const geometry = new THREE.ExtrudeGeometry(shape, {
-        depth, bevelEnabled: true, bevelSegments: 2, steps: 1,
-        bevelSize: 0.012, bevelThickness: 0.01, curveSegments: 10
+        depth,
+        bevelEnabled: true,
+        bevelSegments: 2,
+        steps: 1,
+        bevelSize: 0.012,
+        bevelThickness: 0.01,
+        curveSegments: 10,
     });
     geometry.translate(0, 0, -depth / 2);
     return geometry;
@@ -230,9 +263,15 @@ function createStageTexture(kind) {
         ctx.strokeStyle = kind === 'deck' ? '#747570' : '#60625e';
         ctx.lineWidth = kind === 'deck' ? 1 : 0.7;
         for (let p = 0; p <= canvas.width; p += spacing) {
-            ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, canvas.height); ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(p, 0);
+            ctx.lineTo(p, canvas.height);
+            ctx.stroke();
             if (kind !== 'deck') {
-                ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(canvas.width, p); ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(0, p);
+                ctx.lineTo(canvas.width, p);
+                ctx.stroke();
             }
         }
     }
@@ -254,7 +293,7 @@ function createProceduralConcertEnvironment(rendererInstance) {
     // Warm gold overhead concert rig reflection
     const topSoftbox = new THREE.Mesh(
         new THREE.PlaneGeometry(22, 22),
-        new THREE.MeshBasicMaterial({ color: stageColor(0xe1e1e1) })
+        new THREE.MeshBasicMaterial({ color: stageColor(0xe1e1e1) }),
     );
     topSoftbox.position.set(0, 12, 0);
     topSoftbox.rotation.x = Math.PI / 2;
@@ -263,7 +302,7 @@ function createProceduralConcertEnvironment(rendererInstance) {
     // Broad softboxes keep the instruments readable at every camera angle.
     const leftStrip = new THREE.Mesh(
         new THREE.PlaneGeometry(16, 8),
-        new THREE.MeshBasicMaterial({ color: stageColor(0xb5c3ee) })
+        new THREE.MeshBasicMaterial({ color: stageColor(0xb5c3ee) }),
     );
     leftStrip.position.set(-14, 5, 0);
     leftStrip.rotation.y = Math.PI / 2;
@@ -272,7 +311,7 @@ function createProceduralConcertEnvironment(rendererInstance) {
     // Warm edge reflection across brushed metal and lacquer.
     const rightStrip = new THREE.Mesh(
         new THREE.PlaneGeometry(16, 8),
-        new THREE.MeshBasicMaterial({ color: stageColor(0xeac0d1) })
+        new THREE.MeshBasicMaterial({ color: stageColor(0xeac0d1) }),
     );
     rightStrip.position.set(14, 5, 0);
     rightStrip.rotation.y = -Math.PI / 2;
@@ -281,7 +320,10 @@ function createProceduralConcertEnvironment(rendererInstance) {
     const envMap = pmremGenerator.fromScene(envScene, 0.04).texture;
     pmremGenerator.dispose();
     envScene.traverse(object => {
-        if (object.isMesh) { object.geometry.dispose(); object.material.dispose(); }
+        if (object.isMesh) {
+            object.geometry.dispose();
+            object.material.dispose();
+        }
     });
     return envMap;
 }
@@ -311,22 +353,22 @@ function initSharedMaterials() {
         chrome: new THREE.MeshStandardMaterial({
             color: 0xe2e8f0,
             metalness: 0.92,
-            roughness: 0.14
+            roughness: 0.14,
         }),
         brushedAluminum: new THREE.MeshStandardMaterial({
             color: 0xaaa99f,
             metalness: 0.82,
-            roughness: 0.28
+            roughness: 0.28,
         }),
         brass: new THREE.MeshStandardMaterial({
             color: 0xc59b58,
             metalness: 0.88,
-            roughness: 0.27
+            roughness: 0.27,
         }),
         stageTrim: new THREE.MeshStandardMaterial({
             color: 0x9b9da3,
             metalness: 0.45,
-            roughness: 0.43
+            roughness: 0.43,
         }),
         walnutWood: new THREE.MeshStandardMaterial({
             color: 0xb97c48,
@@ -334,17 +376,17 @@ function initSharedMaterials() {
             bumpMap: woodTex,
             bumpScale: 0.008,
             metalness: 0.1,
-            roughness: 0.42
+            roughness: 0.42,
         }),
         mapleWood: new THREE.MeshStandardMaterial({
             color: 0xd6a874,
             metalness: 0.06,
-            roughness: 0.36
+            roughness: 0.36,
         }),
         matteBlack: new THREE.MeshStandardMaterial({
             color: 0x171b1c,
             metalness: 0.2,
-            roughness: 0.72
+            roughness: 0.72,
         }),
         obsidianDeck: new THREE.MeshStandardMaterial({
             color: 0x202622,
@@ -352,7 +394,7 @@ function initSharedMaterials() {
             bumpMap: deckTex,
             bumpScale: 0.012,
             metalness: 0.08,
-            roughness: 0.84
+            roughness: 0.84,
         }),
         charcoalFabric: new THREE.MeshStandardMaterial({
             color: 0x353b38,
@@ -360,56 +402,56 @@ function initSharedMaterials() {
             bumpMap: fabricTex,
             bumpScale: 0.009,
             metalness: 0.08,
-            roughness: 0.82
+            roughness: 0.82,
         }),
         skinClay: new THREE.MeshStandardMaterial({
             color: 0xc9b3a1,
             metalness: 0.04,
-            roughness: 0.52
+            roughness: 0.52,
         }),
         drumheadWhite: new THREE.MeshStandardMaterial({
             color: 0xf1f5f9,
             metalness: 0.06,
-            roughness: 0.4
+            roughness: 0.4,
         }),
         ebonyKey: new THREE.MeshStandardMaterial({
             color: 0x090d16,
             metalness: 0.25,
-            roughness: 0.22
+            roughness: 0.22,
         }),
         ivoryKey: new THREE.MeshStandardMaterial({
             color: 0xf8fafc,
             metalness: 0.08,
-            roughness: 0.18
+            roughness: 0.18,
         }),
         inactiveRing: new THREE.MeshStandardMaterial({
             color: 0x3e4844,
             roughness: 0.3,
-            metalness: 0.4
+            metalness: 0.4,
         }),
         mutedRing: new THREE.MeshStandardMaterial({
             color: 0x334155,
             roughness: 0.3,
-            metalness: 0.4
+            metalness: 0.4,
         }),
         popFilterDark: new THREE.MeshBasicMaterial({
             color: 0x070913,
             transparent: true,
             opacity: 0.65,
-            side: THREE.DoubleSide
+            side: THREE.DoubleSide,
         }),
         hitProxyMat: new THREE.MeshBasicMaterial({
-            visible: false
-        })
+            visible: false,
+        }),
     };
 
     const jacketColors = {
-        drums:   0x403b33,
-        bass:    0x263b37,
-        chords:  0x41403a,
-        melody:  0x314338,
+        drums: 0x403b33,
+        bass: 0x263b37,
+        chords: 0x41403a,
+        melody: 0x314338,
         strings: 0x503831,
-        vocals:  0x393936
+        vocals: 0x393936,
     };
     Object.keys(CATEGORY_META).forEach(cat => {
         const hex = CATEGORY_META[cat].hex;
@@ -419,42 +461,48 @@ function initSharedMaterials() {
                 emissive: hex,
                 emissiveIntensity: 0.07,
                 roughness: 0.3,
-                metalness: 0.3
+                metalness: 0.3,
             }),
             jacket: new THREE.MeshStandardMaterial({
                 color: jacketColors[cat] || 0x1e293b,
                 roughness: 0.84,
-                metalness: 0.04
+                metalness: 0.04,
             }),
             activeRing: new THREE.MeshStandardMaterial({
                 color: hex,
                 emissive: hex,
                 emissiveIntensity: 0.32,
                 roughness: 0.3,
-                metalness: 0.4
+                metalness: 0.4,
             }),
             wave: new THREE.MeshBasicMaterial({
                 color: hex,
                 side: THREE.DoubleSide,
                 transparent: true,
-                opacity: 0.0
-            })
+                opacity: 0.0,
+            }),
         };
     });
 
     // Shared Performer & Instrument Geometries (Allocated once, reused across all 100 performers)
     sharedPerformerGeometries = {
         leg: new THREE.CylinderGeometry(0.065, 0.055, 0.42, 10),
-        torso: new THREE.LatheGeometry([
-            new THREE.Vector2(0.145, -0.25), new THREE.Vector2(0.17, -0.23),
-            new THREE.Vector2(0.18, 0.04), new THREE.Vector2(0.22, 0.17),
-            new THREE.Vector2(0.19, 0.22), new THREE.Vector2(0.11, 0.25)
-        ], 16),
+        torso: new THREE.LatheGeometry(
+            [
+                new THREE.Vector2(0.145, -0.25),
+                new THREE.Vector2(0.17, -0.23),
+                new THREE.Vector2(0.18, 0.04),
+                new THREE.Vector2(0.22, 0.17),
+                new THREE.Vector2(0.19, 0.22),
+                new THREE.Vector2(0.11, 0.25),
+            ],
+            16,
+        ),
         collar: new THREE.CylinderGeometry(0.12, 0.12, 0.06, 12),
         cranium: new THREE.SphereGeometry(0.18, 20, 16),
         jaw: new THREE.SphereGeometry(0.12, 16, 12),
         shoe: createBeveledBoxGeometry(0.13, 0.085, 0.23, 0.025),
-        shirt: createBeveledBoxGeometry(0.075, 0.30, 0.018, 0.006),
+        shirt: createBeveledBoxGeometry(0.075, 0.3, 0.018, 0.006),
         visor: createBeveledBoxGeometry(0.27, 0.065, 0.12, 0.018),
         visorRim: new THREE.BoxGeometry(0.28, 0.018, 0.125),
         headband: new THREE.TorusGeometry(0.195, 0.02, 8, 20, Math.PI),
@@ -472,11 +520,17 @@ function initSharedMaterials() {
         snareShell: new THREE.CylinderGeometry(0.17, 0.17, 0.11, 16),
         snareHead: new THREE.CylinderGeometry(0.164, 0.164, 0.008, 24),
         cymbalStand: new THREE.CylinderGeometry(0.018, 0.018, 0.85, 8),
-        cymbalDisc: new THREE.LatheGeometry([
-            new THREE.Vector2(0.012, 0.035), new THREE.Vector2(0.035, 0.035),
-            new THREE.Vector2(0.055, 0.012), new THREE.Vector2(0.12, 0.003),
-            new THREE.Vector2(0.235, -0.006), new THREE.Vector2(0.24, -0.012)
-        ], 32),
+        cymbalDisc: new THREE.LatheGeometry(
+            [
+                new THREE.Vector2(0.012, 0.035),
+                new THREE.Vector2(0.035, 0.035),
+                new THREE.Vector2(0.055, 0.012),
+                new THREE.Vector2(0.12, 0.003),
+                new THREE.Vector2(0.235, -0.006),
+                new THREE.Vector2(0.24, -0.012),
+            ],
+            32,
+        ),
         drumstick: new THREE.CylinderGeometry(0.01, 0.014, 0.34, 6),
         drumLug: new THREE.CylinderGeometry(0.012, 0.012, 0.28, 6),
         // Bass
@@ -495,7 +549,7 @@ function initSharedMaterials() {
         // Chords
         synthLeg: new THREE.CylinderGeometry(0.02, 0.02, 0.66, 8),
         synthChassis: createBeveledBoxGeometry(0.84, 0.08, 0.32, 0.018),
-        synthCheek: createBeveledBoxGeometry(0.04, 0.10, 0.34, 0.012),
+        synthCheek: createBeveledBoxGeometry(0.04, 0.1, 0.34, 0.012),
         controlKnob: new THREE.CylinderGeometry(0.014, 0.018, 0.026, 10),
         synthDisplay: new THREE.BoxGeometry(0.12, 0.006, 0.055),
         synthStrip: new THREE.BoxGeometry(0.82, 0.022, 0.02),
@@ -504,11 +558,17 @@ function initSharedMaterials() {
         // Melody
         saxBody: new THREE.CylinderGeometry(0.032, 0.058, 0.46, 12),
         saxBow: new THREE.TorusGeometry(0.075, 0.045, 10, 16, Math.PI),
-        saxBell: new THREE.LatheGeometry([
-            new THREE.Vector2(0.03, -0.12), new THREE.Vector2(0.04, -0.05),
-            new THREE.Vector2(0.06, 0.045), new THREE.Vector2(0.095, 0.10),
-            new THREE.Vector2(0.13, 0.12), new THREE.Vector2(0.132, 0.125)
-        ], 24),
+        saxBell: new THREE.LatheGeometry(
+            [
+                new THREE.Vector2(0.03, -0.12),
+                new THREE.Vector2(0.04, -0.05),
+                new THREE.Vector2(0.06, 0.045),
+                new THREE.Vector2(0.095, 0.1),
+                new THREE.Vector2(0.13, 0.12),
+                new THREE.Vector2(0.132, 0.125),
+            ],
+            24,
+        ),
         saxNeck: new THREE.CylinderGeometry(0.016, 0.026, 0.18, 8),
         saxKey: new THREE.CylinderGeometry(0.015, 0.015, 0.012, 8),
         // Strings
@@ -526,23 +586,38 @@ function initSharedMaterials() {
         micBody: new THREE.CylinderGeometry(0.036, 0.036, 0.14, 12),
         micGrille: new THREE.SphereGeometry(0.042, 12, 12),
         popRim: new THREE.TorusGeometry(0.085, 0.008, 8, 18),
-        popScreen: new THREE.CircleGeometry(0.082, 16)
+        popScreen: new THREE.CircleGeometry(0.082, 16),
     };
     // Fine strings and frets stay a single geometry per instrument.
-    const stringPositions = [], fretPositions = [], celloStrings = [];
+    const stringPositions = [],
+        fretPositions = [],
+        celloStrings = [];
     for (let i = 0; i < 4; i++) {
         const offset = (i - 1.5) * 0.012;
         stringPositions.push(-0.16, 0.025 + offset, 0.044, 0.58, 0.025 + offset, 0.044);
         celloStrings.push(offset, -0.29, 0.068, offset, 0.53, 0.068);
     }
     for (let i = 1; i < 12; i++) {
-        const x = 0.06 + (0.44 * (1 - Math.pow(0.94, i)) / (1 - Math.pow(0.94, 12)));
+        const x = 0.06 + (0.44 * (1 - Math.pow(0.94, i))) / (1 - Math.pow(0.94, 12));
         fretPositions.push(x, -0.003, 0.019, x, 0.059, 0.019);
     }
-    sharedPerformerGeometries.bassStrings = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(stringPositions, 3));
-    sharedPerformerGeometries.bassFrets = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(fretPositions, 3));
-    sharedPerformerGeometries.celloStrings = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(celloStrings, 3));
-    sharedStudioMaterials.instrumentWire = new THREE.LineBasicMaterial({ color: 0xd9cfb4, transparent: true, opacity: 0.8 });
+    sharedPerformerGeometries.bassStrings = new THREE.BufferGeometry().setAttribute(
+        'position',
+        new THREE.Float32BufferAttribute(stringPositions, 3),
+    );
+    sharedPerformerGeometries.bassFrets = new THREE.BufferGeometry().setAttribute(
+        'position',
+        new THREE.Float32BufferAttribute(fretPositions, 3),
+    );
+    sharedPerformerGeometries.celloStrings = new THREE.BufferGeometry().setAttribute(
+        'position',
+        new THREE.Float32BufferAttribute(celloStrings, 3),
+    );
+    sharedStudioMaterials.instrumentWire = new THREE.LineBasicMaterial({
+        color: 0xd9cfb4,
+        transparent: true,
+        opacity: 0.8,
+    });
     // r128 expects linear material colors when the renderer outputs sRGB.
     // Decode the palette once so charcoal stays charcoal under the concert rig.
     Object.values(sharedStudioMaterials).forEach(material => {
@@ -550,11 +625,13 @@ function initSharedMaterials() {
         if (material.emissive) material.emissive.convertSRGBToLinear();
         if ('envMapIntensity' in material) material.envMapIntensity = 0.32;
     });
-    Object.values(sharedCategoryMaterials).forEach(palette => Object.values(palette).forEach(material => {
-        material.color.convertSRGBToLinear();
-        if (material.emissive) material.emissive.convertSRGBToLinear();
-        if ('envMapIntensity' in material) material.envMapIntensity = 0.32;
-    }));
+    Object.values(sharedCategoryMaterials).forEach(palette =>
+        Object.values(palette).forEach(material => {
+            material.color.convertSRGBToLinear();
+            if (material.emissive) material.emissive.convertSRGBToLinear();
+            if ('envMapIntensity' in material) material.envMapIntensity = 0.32;
+        }),
+    );
 }
 
 function initThreeStage() {
@@ -602,7 +679,12 @@ function initThreeStage() {
     // Deep Midnight Surrounding Arena Floor
     const subFloor = new THREE.Mesh(
         new THREE.CircleGeometry(95, 64),
-        new THREE.MeshStandardMaterial({ color: stageColor(0x0c100e), roughness: 0.97, metalness: 0.02, envMapIntensity: 0.12 })
+        new THREE.MeshStandardMaterial({
+            color: stageColor(0x0c100e),
+            roughness: 0.97,
+            metalness: 0.02,
+            envMapIntensity: 0.12,
+        }),
     );
     subFloor.rotation.x = -Math.PI / 2;
     subFloor.position.y = -0.32;
@@ -613,17 +695,14 @@ function initThreeStage() {
     // Main Grand Circular Stage Platform (Base Radius = 11.4, scales smoothly as tiers 3..7 unlock)
     mainArenaDeckMesh = new THREE.Mesh(
         new THREE.CylinderGeometry(11.4, 11.7, 0.28, 96),
-        sharedStudioMaterials.obsidianDeck
+        sharedStudioMaterials.obsidianDeck,
     );
     mainArenaDeckMesh.position.set(0, -0.18, 0);
     mainArenaDeckMesh.receiveShadow = true;
     scene.add(mainArenaDeckMesh);
 
     // Outer Brushed Brass Perimeter Ring (Encloses all active stage rings!)
-    outerBrassRimMesh = new THREE.Mesh(
-        new THREE.TorusGeometry(11.45, 0.08, 16, 128),
-        sharedStudioMaterials.stageTrim
-    );
+    outerBrassRimMesh = new THREE.Mesh(new THREE.TorusGeometry(11.45, 0.08, 16, 128), sharedStudioMaterials.stageTrim);
     outerBrassRimMesh.rotation.x = Math.PI / 2;
     outerBrassRimMesh.position.set(0, -0.04, 0);
     scene.add(outerBrassRimMesh);
@@ -631,17 +710,20 @@ function initThreeStage() {
     // Inner 6-Stage Platform Riser (Tier 1, Radius = 6.0)
     const innerStageDeck = new THREE.Mesh(
         new THREE.CylinderGeometry(5.9, 6.05, 0.1, 72),
-        new THREE.MeshStandardMaterial({ color: stageColor(0x262d27), map: sharedStudioMaterials.obsidianDeck.map, roughness: 0.84, metalness: 0.06, envMapIntensity: 0.16 })
+        new THREE.MeshStandardMaterial({
+            color: stageColor(0x262d27),
+            map: sharedStudioMaterials.obsidianDeck.map,
+            roughness: 0.84,
+            metalness: 0.06,
+            envMapIntensity: 0.16,
+        }),
     );
     innerStageDeck.position.set(0, -0.03, 0);
     innerStageDeck.receiveShadow = true;
     stageThemeSurfaces.inner = innerStageDeck.material;
     scene.add(innerStageDeck);
 
-    const innerBrassRim = new THREE.Mesh(
-        new THREE.TorusGeometry(5.95, 0.045, 16, 96),
-        sharedStudioMaterials.stageTrim
-    );
+    const innerBrassRim = new THREE.Mesh(new THREE.TorusGeometry(5.95, 0.045, 16, 96), sharedStudioMaterials.stageTrim);
     innerBrassRim.rotation.x = Math.PI / 2;
     innerBrassRim.position.set(0, 0.02, 0);
     scene.add(innerBrassRim);
@@ -653,18 +735,15 @@ function initThreeStage() {
         roughness: 0.86,
         metalness: 0.06,
         envMapIntensity: 0.16,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
     });
     stageThemeSurfaces.riser = riserRingMat;
 
-    STAGE_TIERS.slice(1).forEach((tCfg) => {
+    STAGE_TIERS.slice(1).forEach(tCfg => {
         const rGroup = new THREE.Group();
         rGroup.position.set(0, -4.5, 0);
 
-        const ringSurface = new THREE.Mesh(
-            new THREE.RingGeometry(tCfg.innerR, tCfg.outerR, 80),
-            riserRingMat
-        );
+        const ringSurface = new THREE.Mesh(new THREE.RingGeometry(tCfg.innerR, tCfg.outerR, 80), riserRingMat);
         ringSurface.rotation.x = -Math.PI / 2;
         ringSurface.position.y = tCfg.elev - 0.04;
         ringSurface.receiveShadow = true;
@@ -672,7 +751,7 @@ function initThreeStage() {
 
         const innerTrim = new THREE.Mesh(
             new THREE.TorusGeometry(tCfg.innerR + 0.02, 0.038, 10, 80),
-            sharedStudioMaterials.stageTrim
+            sharedStudioMaterials.stageTrim,
         );
         innerTrim.rotation.x = Math.PI / 2;
         innerTrim.position.y = tCfg.elev - 0.03;
@@ -680,7 +759,7 @@ function initThreeStage() {
 
         const outerTrim = new THREE.Mesh(
             new THREE.TorusGeometry(tCfg.outerR, 0.042, 10, 80),
-            sharedStudioMaterials.stageTrim
+            sharedStudioMaterials.stageTrim,
         );
         outerTrim.rotation.x = Math.PI / 2;
         outerTrim.position.y = tCfg.elev - 0.03;
@@ -692,9 +771,8 @@ function initThreeStage() {
     });
 
     // ---------------- 64 RADIAL AUDIO-REACTIVE FLOOR EQ BARS ----------------
-    const eqBarGeo = new THREE.BoxGeometry(0.10, 0.04, 0.42);
-    floorEQInstancedMesh = new THREE.InstancedMesh(eqBarGeo,
-        new THREE.MeshBasicMaterial({ color: 0xffffff }), 64);
+    const eqBarGeo = new THREE.BoxGeometry(0.1, 0.04, 0.42);
+    floorEQInstancedMesh = new THREE.InstancedMesh(eqBarGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }), 64);
     floorEQInstancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     for (let i = 0; i < 64; i++) {
         const angle = (i / 64) * Math.PI * 2;
@@ -705,7 +783,7 @@ function initThreeStage() {
         _tempDummy.scale.set(1, 1, 1);
         _tempDummy.updateMatrix();
         floorEQInstancedMesh.setMatrixAt(i, _tempDummy.matrix);
-        const category = Object.keys(CATEGORY_META)[Math.floor(i / 64 * 6)];
+        const category = Object.keys(CATEGORY_META)[Math.floor((i / 64) * 6)];
         floorEQInstancedMesh.setColorAt(i, _tempColor.copy(stageColor(CATEGORY_META[category].hex)));
     }
     scene.add(floorEQInstancedMesh);
@@ -713,31 +791,26 @@ function initThreeStage() {
     // Recessed radial seams and footlights give the room a deliberate architectural scale.
     const seamVertices = [];
     for (let i = 0; i < 24; i++) {
-        const a = i / 24 * Math.PI * 2;
-        seamVertices.push(Math.sin(a) * 1.5, 0.027, Math.cos(a) * 1.5,
-            Math.sin(a) * 5.84, 0.027, Math.cos(a) * 5.84);
+        const a = (i / 24) * Math.PI * 2;
+        seamVertices.push(Math.sin(a) * 1.5, 0.027, Math.cos(a) * 1.5, Math.sin(a) * 5.84, 0.027, Math.cos(a) * 5.84);
     }
     const seamMaterial = new THREE.LineBasicMaterial({ color: 0x687269, transparent: true, opacity: 0.18 });
     stageThemeSurfaces.seam = seamMaterial;
-    scene.add(new THREE.LineSegments(
-        new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(seamVertices, 3)),
-        seamMaterial
-    ));
+    scene.add(
+        new THREE.LineSegments(
+            new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(seamVertices, 3)),
+            seamMaterial,
+        ),
+    );
 
     // ---------------- CENTRAL HARMONIC GYROSCOPE CORE AT (0, 0, 0) ----------------
     centerCoreGroup = new THREE.Group();
     centerCoreGroup.position.set(0, 0.02, 0);
 
-    const coreBase = new THREE.Mesh(
-        new THREE.CylinderGeometry(1.15, 1.35, 0.14, 36),
-        sharedStudioMaterials.matteBlack
-    );
+    const coreBase = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.35, 0.14, 36), sharedStudioMaterials.matteBlack);
     centerCoreGroup.add(coreBase);
 
-    const coreBrassRing = new THREE.Mesh(
-        new THREE.TorusGeometry(1.22, 0.035, 12, 48),
-        sharedStudioMaterials.stageTrim
-    );
+    const coreBrassRing = new THREE.Mesh(new THREE.TorusGeometry(1.22, 0.035, 12, 48), sharedStudioMaterials.stageTrim);
     coreBrassRing.rotation.x = Math.PI / 2;
     coreBrassRing.position.y = 0.06;
     centerCoreGroup.add(coreBrassRing);
@@ -748,7 +821,7 @@ function initThreeStage() {
         emissiveIntensity: 0.18,
         envMapIntensity: 0.32,
         metalness: 0.7,
-        roughness: 0.15
+        roughness: 0.15,
     });
     const crystalMesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.32, 1), crystalMat);
     crystalMesh.position.y = 0.9;
@@ -756,7 +829,12 @@ function initThreeStage() {
 
     const gyroRing1 = new THREE.Mesh(
         new THREE.TorusGeometry(0.58, 0.02, 12, 48),
-        new THREE.MeshStandardMaterial({ color: stageColor(0xd9dce1), roughness: 0.4, metalness: 0.3, envMapIntensity: 0.3 })
+        new THREE.MeshStandardMaterial({
+            color: stageColor(0xd9dce1),
+            roughness: 0.4,
+            metalness: 0.3,
+            envMapIntensity: 0.3,
+        }),
     );
     gyroRing1.position.y = 0.9;
     gyroRing1.rotation.x = 0.75;
@@ -764,7 +842,12 @@ function initThreeStage() {
 
     const gyroRing2 = new THREE.Mesh(
         new THREE.TorusGeometry(0.74, 0.018, 12, 48),
-        new THREE.MeshStandardMaterial({ color: stageColor(0x3b82f6), roughness: 0.4, metalness: 0.3, envMapIntensity: 0.3 })
+        new THREE.MeshStandardMaterial({
+            color: stageColor(0x3b82f6),
+            roughness: 0.4,
+            metalness: 0.3,
+            envMapIntensity: 0.3,
+        }),
     );
     gyroRing2.position.y = 0.9;
     gyroRing2.rotation.x = -0.6;
@@ -791,7 +874,7 @@ function initThreeStage() {
 
         const truss = new THREE.InstancedMesh(trussRailGeometry, sharedStudioMaterials.brushedAluminum, 3);
         for (let rail = 0; rail < 3; rail++) {
-            const a = rail / 3 * Math.PI * 2;
+            const a = (rail / 3) * Math.PI * 2;
             _tempDummy.position.set(Math.sin(a) * 0.14, 3.1, Math.cos(a) * 0.14);
             _tempDummy.rotation.set(0, 0, 0);
             _tempDummy.scale.setScalar(1);
@@ -810,7 +893,7 @@ function initThreeStage() {
 
         // Each tower repeats one instrument color.
         const stripMat = new THREE.MeshBasicMaterial({
-            color: stageColor(CATEGORY_META[Object.keys(CATEGORY_META)[t % 6]].hex)
+            color: stageColor(CATEGORY_META[Object.keys(CATEGORY_META)[t % 6]].hex),
         });
         const ledStrip = new THREE.Mesh(new THREE.BoxGeometry(0.04, 5.2, 0.04), stripMat);
         ledStrip.position.set(0, 3.1, 0.14);
@@ -832,7 +915,7 @@ function initThreeStage() {
             opacity: 0.045,
             depthWrite: false,
             blending: THREE.AdditiveBlending,
-            side: THREE.DoubleSide
+            side: THREE.DoubleSide,
         });
         const beamCone = new THREE.Mesh(new THREE.ConeGeometry(2.4, 7.5, 24, 1, true), beamMat);
         beamCone.position.set(0, 3.2, 2.2);
@@ -862,7 +945,7 @@ function initThreeStage() {
         size: 0.055,
         transparent: true,
         depthWrite: false,
-        opacity: 0.22
+        opacity: 0.22,
     });
     bokehParticles = new THREE.Points(pGeo, pMat);
     scene.add(bokehParticles);
@@ -906,7 +989,12 @@ function initThreeStage() {
         segBox: new THREE.BoxGeometry(0.08, 0.02, 0.035),
         waveRing: new THREE.RingGeometry(0.98, 1.12, 24),
         hitProxyCyl: new THREE.CylinderGeometry(1.0, 1.0, 1.85, 12),
-        baseMat: new THREE.MeshStandardMaterial({ color: stageColor(0x303731), roughness: 0.66, metalness: 0.28, envMapIntensity: 0.25 })
+        baseMat: new THREE.MeshStandardMaterial({
+            color: stageColor(0x303731),
+            roughness: 0.66,
+            metalness: 0.28,
+            envMapIntensity: 0.25,
+        }),
     };
 
     // Single InstancedMesh for all 100 * 16 = 1,600 circular step LEDs (1 draw call total!)
@@ -957,7 +1045,7 @@ function updatePedestalInstancedLEDPositions(idx, pedY) {
             _tempDummy.position.set(
                 basePos.x + Math.sin(sAngle) * r,
                 pedY + 0.065 * pScale,
-                basePos.z + Math.cos(sAngle) * r
+                basePos.z + Math.cos(sAngle) * r,
             );
             _tempDummy.rotation.set(0, sAngle, 0);
             _tempDummy.scale.set(pScale, pScale, pScale);
@@ -1000,7 +1088,7 @@ function createPedestalAtSlot(idx) {
     if (pedestalMeshes[idx]) return pedestalMeshes[idx];
     const tCfg = getSlotTierConfig(idx);
     const ringIdx = idx - tCfg.start;
-    const angle = (ringIdx * (Math.PI * 2 / tCfg.count)) + tCfg.angleOffset;
+    const angle = ringIdx * ((Math.PI * 2) / tCfg.count) + tCfg.angleOffset;
     const radius = tCfg.radius;
 
     const x = Math.sin(angle) * radius;
@@ -1010,7 +1098,7 @@ function createPedestalAtSlot(idx) {
     const rootGroup = new THREE.Group();
     rootGroup.position.set(x, initialY, z);
     // Slightly scale down outer stadium pedestals so 20-pedestal rings have generous breathing room
-    const pScale = tCfg.tier <= 2 ? 1.0 : (tCfg.tier <= 4 ? 0.9 : 0.82);
+    const pScale = tCfg.tier <= 2 ? 1.0 : tCfg.tier <= 4 ? 0.9 : 0.82;
     rootGroup.scale.set(pScale, pScale, pScale);
     rootGroup.rotation.y = Math.atan2(-x, -z + 12.0) * 0.55;
     rootGroup.userData = { slotIndex: idx };
@@ -1049,7 +1137,7 @@ function createPedestalAtSlot(idx) {
         color: 0xffffff,
         side: THREE.DoubleSide,
         transparent: true,
-        opacity: 0.0
+        opacity: 0.0,
     });
     const waveMesh = new THREE.Mesh(sharedPedestalGeometries.waveRing, waveMat);
     waveMesh.rotation.x = -Math.PI / 2;
@@ -1074,7 +1162,7 @@ function createPedestalAtSlot(idx) {
         waveMesh,
         performerGroup,
         rig: null,
-        departingPerformers: []
+        departingPerformers: [],
     };
     pedestalMeshes[idx] = pedObj;
     updatePedestalInstancedLEDPositions(idx, initialY);

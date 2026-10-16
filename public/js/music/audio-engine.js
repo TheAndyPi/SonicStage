@@ -128,9 +128,7 @@ class StudioAudioEngine {
             const g = this.ctx.createGain();
             g.gain.setValueAtTime(appState.slots[idx].volume, this.ctx.currentTime);
 
-            const panner = this.ctx.createStereoPanner
-                ? this.ctx.createStereoPanner()
-                : this.ctx.createGain();
+            const panner = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : this.ctx.createGain();
             if (panner.pan) {
                 panner.pan.setValueAtTime(appState.slots[idx].pan || 0, this.ctx.currentTime);
             }
@@ -197,7 +195,7 @@ class StudioAudioEngine {
             this.slotGains[slotIndex].gain.setTargetAtTime(
                 Math.max(0, Math.min(1.2, volumeValue)),
                 this.ctx.currentTime,
-                0.015
+                0.015,
             );
         }
     }
@@ -208,7 +206,7 @@ class StudioAudioEngine {
             this.slotPanners[slotIndex].pan.setTargetAtTime(
                 Math.max(-1, Math.min(1, Number(panValue) || 0)),
                 this.ctx.currentTime,
-                0.015
+                0.015,
             );
         }
     }
@@ -255,7 +253,7 @@ class StudioAudioEngine {
         if (!this.isRecording) {
             this.recordedChunks = [];
             this.mediaRecorder = new MediaRecorder(this.mediaDest.stream);
-            this.mediaRecorder.ondataavailable = (e) => {
+            this.mediaRecorder.ondataavailable = e => {
                 if (e.data && e.data.size > 0) this.recordedChunks.push(e.data);
             };
             this.mediaRecorder.onstop = () => {
@@ -316,7 +314,11 @@ class StudioAudioEngine {
             if (this.ctx && appState.isPlaying) {
                 // Guard against extreme computational overload at 1000+ BPM by capping events per tick
                 let safetySteps = 0;
-                while (!this.songEndScheduled && this.nextNoteTime < this.ctx.currentTime + scheduleAheadSec && safetySteps < 24) {
+                while (
+                    !this.songEndScheduled &&
+                    this.nextNoteTime < this.ctx.currentTime + scheduleAheadSec &&
+                    safetySteps < 24
+                ) {
                     this.scheduleStep(this.current16thStep, this.nextNoteTime);
                     this.advanceStep();
                     safetySteps++;
@@ -338,7 +340,9 @@ class StudioAudioEngine {
         const secondsPer16th = 0.25 * secondsPerBeat;
         // Apply global groove swing from Pro FX rack when BPM <= 260
         const swingRatio = safeBpm > 260 ? 0 : appState.globalSwing;
-        this.nextNoteTime += secondsPer16th + (this.current16thStep % 2 === 0 ? secondsPer16th * swingRatio : -secondsPer16th * swingRatio);
+        this.nextNoteTime +=
+            secondsPer16th +
+            (this.current16thStep % 2 === 0 ? secondsPer16th * swingRatio : -secondsPer16th * swingRatio);
         this.current16thStep = (this.current16thStep + 1) % 16;
         if (this.current16thStep === 0 && !songState.audition) {
             const next = songState.measures.indexOf(songState.playMeasure) + 1;
@@ -366,7 +370,9 @@ class StudioAudioEngine {
     }
 
     scheduleStep(stepIndex, time) {
-        const measure = songState.audition ? songState.measures[songState.selected] : (songState.playMeasure || songState.measures[0]);
+        const measure = songState.audition
+            ? songState.measures[songState.selected]
+            : songState.playMeasure || songState.measures[0];
         const playbackSlots = measure.slots;
         const triggeredSlots = [];
         const safeBpm = Math.max(1, Math.min(2400, appState.bpm));
@@ -393,13 +399,13 @@ class StudioAudioEngine {
                 pendingAudioTriggers.push({
                     slot,
                     shiftedEvent,
-                    noteTime
+                    noteTime,
                 });
                 triggeredSlots.push({
                     slotIndex: slot.index,
                     intensity: (heightsArr[stepIndex] || 0.85) * (0.35 + slot.volume * 0.65),
                     vowel: rawStepEvent.v || 'A',
-                    rawEvent: rawStepEvent
+                    rawEvent: rawStepEvent,
                 });
             }
         }
@@ -425,9 +431,7 @@ class StudioAudioEngine {
             selectedTriggers = uniqueFirst.concat(extras).slice(0, MAX_VOICES_PER_STEP);
         }
 
-        const ensembleAttenuation = totalAudibleSlots > 6
-            ? 1 / Math.pow(totalAudibleSlots / 5, 0.36)
-            : 1.0;
+        const ensembleAttenuation = totalAudibleSlots > 6 ? 1 / Math.pow(totalAudibleSlots / 5, 0.36) : 1.0;
 
         selectedTriggers.forEach(({ slot, shiftedEvent, noteTime }) => {
             if (this.slotGains[slot.index]) {
@@ -447,11 +451,16 @@ class StudioAudioEngine {
         const slot = slotIndex >= 0 ? appState.slots[slotIndex] : null;
         const stepsArr = slot ? getSlotSteps(slot) : preset.steps;
         const firstIdx = stepsArr.findIndex(s => s !== null);
-        const evtToPlay = customEvent !== null ? customEvent : (firstIdx >= 0 ? stepsArr[firstIdx] : null);
+        const evtToPlay = customEvent !== null ? customEvent : firstIdx >= 0 ? stepsArr[firstIdx] : null;
         if (evtToPlay !== null && evtToPlay !== undefined) {
-            const pitchShift = slot ? (slot.pitchShift || 0) : 0;
-            this.activeBus = (slotIndex >= 0 && this.slotGains[slotIndex]) ? this.slotGains[slotIndex] : this.compressor;
-            this.triggerInstrument(preset.synthType, this.applyPitchShiftToStepEvent(evtToPlay, pitchShift), this.ctx.currentTime + 0.01, 0);
+            const pitchShift = slot ? slot.pitchShift || 0 : 0;
+            this.activeBus = slotIndex >= 0 && this.slotGains[slotIndex] ? this.slotGains[slotIndex] : this.compressor;
+            this.triggerInstrument(
+                preset.synthType,
+                this.applyPitchShiftToStepEvent(evtToPlay, pitchShift),
+                this.ctx.currentTime + 0.01,
+                0,
+            );
             this.activeBus = this.compressor;
         }
     }
@@ -487,8 +496,10 @@ class StudioAudioEngine {
                 break;
             case 'synthwave':
                 if (val === 'K') this.playKick(time, 155, 44, 0.28, 0.88);
-                else if (val === 'G') { this.playSnare(time, 0.32, 0.75); this.playClap(time); }
-                else if (val === 'H') this.playHiHat(time, 0.045, 8800, 0.22);
+                else if (val === 'G') {
+                    this.playSnare(time, 0.32, 0.75);
+                    this.playClap(time);
+                } else if (val === 'H') this.playHiHat(time, 0.045, 8800, 0.22);
                 else if (val === 'T') this.playTaiko(time, 130, 52, 0.25);
                 break;
             case 'funkyhats':
@@ -508,12 +519,12 @@ class StudioAudioEngine {
                     this.playJazzRide(time, 0.34, 0.26, false);
                     this.playKick(time, 108, 48, 0.22, 0.48);
                 } else if (val === 'C') {
-                    this.playJazzRide(time, 0.30, 0.24, false);
-                    this.playHiHat(time, 0.032, 8800, 0.30);
+                    this.playJazzRide(time, 0.3, 0.24, false);
+                    this.playHiHat(time, 0.032, 8800, 0.3);
                     this.playShaker(time);
                 } else if (val === 'B') {
                     this.playJazzRide(time, 0.36, 0.28, true);
-                    this.playHiHat(time, 0.032, 8800, 0.30);
+                    this.playHiHat(time, 0.032, 8800, 0.3);
                     this.playShaker(time);
                 } else if (val === 'G') {
                     this.playJazzRide(time, 0.28, 0.22, false);
@@ -550,8 +561,10 @@ class StudioAudioEngine {
                 break;
             case 'industrial':
                 if (val === 'K') this.playKick(time, 180, 38, 0.34, 0.94);
-                else if (val === 'G') { this.playClap(time); this.playSnare(time, 0.26, 0.72); }
-                else if (val === 'M') this.playCowbell(time, 520, 0.09);
+                else if (val === 'G') {
+                    this.playClap(time);
+                    this.playSnare(time, 0.26, 0.72);
+                } else if (val === 'M') this.playCowbell(time, 520, 0.09);
                 else if (val === 'H') this.playHiHat(time, 0.04, 8600, 0.24);
                 break;
             case 'cowbellperc':
@@ -683,7 +696,13 @@ class StudioAudioEngine {
                 this.playDiphthongVocal(time, val.notes.map(midiToFreq), val, stepDur * 6.8, 'choir');
                 break;
             case 'gospel':
-                this.playDiphthongVocal(time, [midiToFreq(val.n), midiToFreq(val.n + 12)], val, stepDur * 1.75, 'gospel');
+                this.playDiphthongVocal(
+                    time,
+                    [midiToFreq(val.n), midiToFreq(val.n + 12)],
+                    val,
+                    stepDur * 1.75,
+                    'gospel',
+                );
                 break;
             case 'vocalchop':
                 this.playDiphthongVocal(time, [midiToFreq(val.n)], val, stepDur * 0.92, 'chop');
@@ -750,8 +769,8 @@ class StudioAudioEngine {
         const bus = this.getTargetBus();
 
         const masterVocalGain = this.ctx.createGain();
-        const attack = (mode === 'choir' || mode === 'monks') ? 0.14 : (mode === 'chop' ? 0.008 : 0.025);
-        const peakGain = (mode === 'choir' || mode === 'monks') ? 0.25 : (mode === 'talkbox' ? 0.34 : 0.29);
+        const attack = mode === 'choir' || mode === 'monks' ? 0.14 : mode === 'chop' ? 0.008 : 0.025;
+        const peakGain = mode === 'choir' || mode === 'monks' ? 0.25 : mode === 'talkbox' ? 0.34 : 0.29;
 
         masterVocalGain.gain.setValueAtTime(0.001, time);
         masterVocalGain.gain.linearRampToValueAtTime(peakGain / Math.sqrt(freqs.length), time + attack);
@@ -764,7 +783,7 @@ class StudioAudioEngine {
             cNoise.buffer = this.noiseBuffer;
             const cFilter = this.ctx.createBiquadFilter();
             cFilter.type = val.c === 's' ? 'highpass' : 'bandpass';
-            cFilter.frequency.setValueAtTime(val.c === 's' ? 5800 : (val.c === 't' ? 4200 : 2200), time);
+            cFilter.frequency.setValueAtTime(val.c === 's' ? 5800 : val.c === 't' ? 4200 : 2200, time);
             cFilter.Q.setValueAtTime(2.5, time);
             const cGain = this.ctx.createGain();
             const cDur = val.c === 's' ? 0.055 : 0.028;
@@ -787,7 +806,7 @@ class StudioAudioEngine {
             bp.Q.setValueAtTime(mode === 'talkbox' || mode === 'vocoder' ? v1.q[idx] * 1.15 : v1.q[idx], time);
 
             const fGain = this.ctx.createGain();
-            fGain.gain.setValueAtTime(idx === 0 ? 1.0 : (idx === 1 ? 0.72 : 0.38), time);
+            fGain.gain.setValueAtTime(idx === 0 ? 1.0 : idx === 1 ? 0.72 : 0.38, time);
             bp.connect(fGain);
             fGain.connect(masterVocalGain);
             return bp;
@@ -805,12 +824,12 @@ class StudioAudioEngine {
         breathSource.stop(time + dur + 0.03);
 
         // Multi-oscillator Voiced Harmonics per Note
-        const detuneOffsets = (mode === 'choir' || mode === 'vocoder' || mode === 'monks') ? [-9, 0, 9] : [-4, 4];
-        freqs.forEach((f) => {
+        const detuneOffsets = mode === 'choir' || mode === 'vocoder' || mode === 'monks' ? [-9, 0, 9] : [-4, 4];
+        freqs.forEach(f => {
             const targetSlideFreq = val.slide ? midiToFreq(val.slide) : f;
-            detuneOffsets.forEach((det) => {
+            detuneOffsets.forEach(det => {
                 const osc = this.ctx.createOscillator();
-                osc.type = mode === 'monks' ? 'sawtooth' : (det > 0 ? 'triangle' : 'sawtooth');
+                osc.type = mode === 'monks' ? 'sawtooth' : det > 0 ? 'triangle' : 'sawtooth';
                 osc.frequency.setValueAtTime(f * (mode === 'chop' ? 0.94 : 0.992), time);
                 osc.frequency.exponentialRampToValueAtTime(f, time + 0.035);
                 if (val.slide) {
@@ -1047,7 +1066,7 @@ class StudioAudioEngine {
             filter.frequency.setValueAtTime(980, time);
             filter.Q.setValueAtTime(1.6, time);
             gain.gain.setValueAtTime(0.001, time);
-            gain.gain.linearRampToValueAtTime(0.20, time + 0.06);
+            gain.gain.linearRampToValueAtTime(0.2, time + 0.06);
             gain.gain.exponentialRampToValueAtTime(0.001, time + dur);
             osc.connect(filter);
             filter.connect(gain);
@@ -1248,7 +1267,7 @@ class StudioAudioEngine {
                 const gain = this.ctx.createGain();
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(f * harm, time);
-                const amp = (hIdx === 0 ? 0.09 : (hIdx === 1 ? 0.055 : 0.035)) / Math.sqrt(freqs.length);
+                const amp = (hIdx === 0 ? 0.09 : hIdx === 1 ? 0.055 : 0.035) / Math.sqrt(freqs.length);
                 gain.gain.setValueAtTime(0.001, time);
                 gain.gain.linearRampToValueAtTime(amp, time + 0.015);
                 gain.gain.exponentialRampToValueAtTime(0.001, time + dur);
@@ -1574,7 +1593,7 @@ class StudioAudioEngine {
 
     playGlassArmonica(time, freqs, dur) {
         const bus = this.getTargetBus();
-        freqs.forEach((f) => {
+        freqs.forEach(f => {
             [1, 2.003].forEach((harm, hIdx) => {
                 const osc = this.ctx.createOscillator();
                 const gain = this.ctx.createGain();
@@ -1594,7 +1613,7 @@ class StudioAudioEngine {
 
     playSingingBowls(time, freqs, dur) {
         const bus = this.getTargetBus();
-        freqs.forEach((f) => {
+        freqs.forEach(f => {
             // Authentic Tibetan bowl inharmonic partials (1 : 2.71 : 5.15) with slow beating
             [1, 1.004, 2.71].forEach((ratio, rIdx) => {
                 const osc = this.ctx.createOscillator();
@@ -1835,8 +1854,8 @@ class StudioAudioEngine {
 
     playWarmPad(time, freqs, dur) {
         const bus = this.getTargetBus();
-        freqs.forEach((f) => {
-            [-6, 6].forEach((detuneCents) => {
+        freqs.forEach(f => {
+            [-6, 6].forEach(detuneCents => {
                 const osc = this.ctx.createOscillator();
                 const filter = this.ctx.createBiquadFilter();
                 const gain = this.ctx.createGain();
@@ -1887,7 +1906,7 @@ class StudioAudioEngine {
 
     playCyberArp(time, freqs, dur) {
         const bus = this.getTargetBus();
-        freqs.forEach((f) => {
+        freqs.forEach(f => {
             const osc = this.ctx.createOscillator();
             const filter = this.ctx.createBiquadFilter();
             const gain = this.ctx.createGain();

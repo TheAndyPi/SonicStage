@@ -22,25 +22,29 @@ function updatePlayButtonUI() {
         iconPause.classList.remove('hidden');
         text.textContent = 'PAUSE';
         btn.setAttribute('aria-label', 'Pause playback');
-        btn.className = 'flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg font-mono font-bold text-[10px] sm:text-[11px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 transition-colors shrink-0';
+        btn.className =
+            'flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg font-mono font-bold text-[10px] sm:text-[11px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 transition-colors shrink-0';
     } else {
         iconPlay.classList.remove('hidden');
         iconPause.classList.add('hidden');
         text.textContent = 'PLAY';
         btn.setAttribute('aria-label', 'Resume playback');
-        btn.className = 'flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg font-mono font-bold text-[10px] sm:text-[11px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 transition-colors shrink-0';
+        btn.className =
+            'flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg font-mono font-bold text-[10px] sm:text-[11px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 transition-colors shrink-0';
     }
 }
 
 function setBeatBarSize(sizeKey, customPxHeight = null) {
     const cfg = BEATBAR_SIZES[sizeKey] || BEATBAR_SIZES.md;
     appState.beatBarSize = sizeKey;
-    const heights = {sm: 174, md: 258, lg: 350, xl: 450};
+    const heights = { sm: 174, md: 258, lg: 350, xl: 450 };
     if (typeof setStudioBeatHeight === 'function') setStudioBeatHeight(customPxHeight || heights[sizeKey] || 258);
     const wrapper = document.getElementById('timeline-tracks-wrapper');
     wrapper.style.setProperty('--step-cell-h', cfg.stepCellPx);
     wrapper.style.setProperty('--row-pad-y', cfg.rowPadPx);
-    document.querySelectorAll('.beatbar-size-btn').forEach(btn => btn.setAttribute('aria-pressed', btn.dataset.size === sizeKey));
+    document
+        .querySelectorAll('.beatbar-size-btn')
+        .forEach(btn => btn.setAttribute('aria-pressed', btn.dataset.size === sizeKey));
 }
 
 function renderTokenPalette() {
@@ -49,7 +53,11 @@ function renderTokenPalette() {
     palette.innerHTML = '';
 
     const query = (document.getElementById('sound-search')?.value || '').trim().toLowerCase();
-    const filtered = orderedStudioSounds().filter(p => (appState.selectedCategory === 'all' || p.category === appState.selectedCategory) && (p.shortName + ' ' + p.category).toLowerCase().includes(query));
+    const filtered = orderedStudioSounds().filter(
+        p =>
+            (appState.selectedCategory === 'all' || p.category === appState.selectedCategory) &&
+            (p.shortName + ' ' + p.category).toLowerCase().includes(query),
+    );
     if (!filtered.length) palette.innerHTML = '<p class="empty-search">No sounds found.</p>';
 
     filtered.forEach(preset => {
@@ -57,7 +65,9 @@ function renderTokenPalette() {
         const assignedSlots = appState.slots.filter(s => s.preset && s.preset.id === preset.id);
         const isActive = assignedSlots.length > 0;
         const badgeText = isActive
-            ? (assignedSlots.length > 1 ? `×${assignedSlots.length}` : `#${assignedSlots[0].index + 1}`)
+            ? assignedSlots.length > 1
+                ? `×${assignedSlots.length}`
+                : `#${assignedSlots[0].index + 1}`
             : '+';
 
         const card = document.createElement('button');
@@ -72,7 +82,7 @@ function renderTokenPalette() {
         let pressTimer = null;
         let startedDrag = false;
 
-        card.addEventListener('pointerdown', (e) => {
+        card.addEventListener('pointerdown', e => {
             startedDrag = false;
             if (e.pointerType !== 'mouse') return;
             pressTimer = setTimeout(() => {
@@ -162,7 +172,7 @@ function renderTimelineTracks() {
     const ruler = document.createElement('div');
     ruler.className = 'beat-ruler';
     ruler.setAttribute('aria-hidden', 'true');
-    ruler.innerHTML = `<div class="beat-step-ruler">${[1,5,9,13].map(n => `<span class="is-downbeat">${n}</span><span>${n+1}</span><span>${n+2}</span><span>${n+3}</span>`).join('')}</div>`;
+    ruler.innerHTML = `<div class="beat-step-ruler">${[1, 5, 9, 13].map(n => `<span class="is-downbeat">${n}</span><span>${n + 1}</span><span>${n + 2}</span><span>${n + 3}</span>`).join('')}</div>`;
     document.querySelector('#timeline-panel > div:nth-child(2)')?.appendChild(ruler);
 
     activeSlots.forEach(slot => {
@@ -170,8 +180,9 @@ function renderTimelineTracks() {
         const audible = isSlotAudible(slot);
         const volPct = Math.round(slot.volume * 100);
         const panVal = slot.pan || 0;
-        const panText = panVal === 0 ? 'C' : (panVal < 0 ? `L${Math.round(Math.abs(panVal) * 50)}` : `R${Math.round(panVal * 50)}`);
-        const octText = slot.pitchShift === 12 ? '+12' : (slot.pitchShift === -12 ? '-12' : '0st');
+        const panText =
+            panVal === 0 ? 'C' : panVal < 0 ? `L${Math.round(Math.abs(panVal) * 50)}` : `R${Math.round(panVal * 50)}`;
+        const octText = slot.pitchShift === 12 ? '+12' : slot.pitchShift === -12 ? '-12' : '0st';
 
         const stepsArr = getSlotSteps(slot);
         const heightsArr = getSlotHeights(slot);
