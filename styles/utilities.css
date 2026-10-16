@@ -1,0 +1,4 @@
+/* Rebuild vendor/utilities.css with npm run build:css after changing utilities. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

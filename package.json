@@ -1,0 +1,15 @@
+{
+  "name": "sonicstage",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A browser music studio with a live 3D stage.",
+  "scripts": {
+    "dev": "python3 -m http.server 4173 --bind 127.0.0.1",
+    "build": "npm run build:css",
+    "build:css": "tailwindcss --config tailwind.config.cjs --input styles/utilities.css --output vendor/utilities.css --minify",
+    "test": "node tests/song-generator.test.cjs && node tests/workspace.test.cjs"
+  },
+  "devDependencies": {
+    "tailwindcss": "3.4.17"
+  }
+}
