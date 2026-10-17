@@ -61,6 +61,7 @@ const masterScope = {
     popout: null,
     windowEl: null,
     windowOpen: false,
+    windowAnimation: null,
     windowPlaced: false,
     compact: false,
 };
@@ -250,7 +251,11 @@ function initMasterScope() {
         (s.compact ? s.hit : s.popout).focus({ preventScroll: true });
     });
     initScopeWindowDrag();
-    window.addEventListener('resize', () => s.windowOpen && clampScopeWindow());
+    window.addEventListener('resize', () => {
+        if (!s.windowOpen) return;
+        if (appState.proFxOpen) placeScopeWindow();
+        else clampScopeWindow();
+    });
 
     let fitQueued = false;
     const queueFit = () => {
@@ -335,39 +340,92 @@ function cycleScopeMode() {
 
 function setScopeWindowOpen(open) {
     const s = masterScope;
+    if (!s.ready || !s.windowEl) return;
+    open = !!open && !cinematicState.active;
+    if (s.windowOpen === open) return;
+    const wasHidden = s.windowEl.hidden;
+    const current = wasHidden ? null : getComputedStyle(s.windowEl);
+    const from = current
+        ? { opacity: current.opacity, transform: current.transform }
+        : { opacity: 0, transform: 'translateY(-8px) scale(0.97)' };
+    s.windowAnimation?.cancel();
+    s.windowAnimation = null;
     s.windowOpen = open;
-    s.windowEl.hidden = !open;
+    s.windowEl.inert = !open;
+    s.windowEl.setAttribute('aria-hidden', !open);
     s.meterEl.classList.toggle('is-popped', open);
     s.windowEl.classList.toggle('is-open', open);
     if (open) {
-        if (!s.windowPlaced) placeScopeWindow();
+        s.windowEl.hidden = false;
+        if (appState.proFxOpen || !s.windowPlaced) placeScopeWindow();
         else clampScopeWindow();
         s.windowEl.focus({ preventScroll: true });
     }
     labelMasterScope();
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches || !s.windowEl.animate) {
+        s.windowEl.hidden = !open;
+        if (!open) resetScopeFxPlacement();
+        return;
+    }
+    const animation = s.windowEl.animate(
+        [from, open ? { opacity: 1, transform: 'none' } : { opacity: 0, transform: 'translateY(-8px) scale(0.97)' }],
+        { duration: open ? 240 : 180, easing: 'cubic-bezier(0.22, 0.8, 0.25, 1)', fill: 'both' },
+    );
+    s.windowAnimation = animation;
+    animation.onfinish = () => {
+        if (s.windowAnimation !== animation) return;
+        s.windowEl.hidden = !s.windowOpen;
+        if (!s.windowOpen) resetScopeFxPlacement();
+        s.windowAnimation = null;
+        animation.cancel();
+    };
 }
 
-// Opens just under the stage camera controls, or under the header when the stage is not showing.
+function resetScopeFxPlacement() {
+    const rack = document.getElementById('pro-fx-drawer');
+    rack?.classList.remove('scope-stacked');
+    rack?.style.removeProperty('--scope-fx-max-height');
+}
+
+// Prefer beside an open rack; stack below it when the viewport cannot fit both across.
 function placeScopeWindow() {
     const s = masterScope;
-    const box = s.windowEl.getBoundingClientRect();
+    resetScopeFxPlacement();
+    const width = s.windowEl.offsetWidth;
+    const height = s.windowEl.offsetHeight;
+    const rack = document.getElementById('pro-fx-drawer');
+    if (appState.proFxOpen && rack?.getClientRects().length) {
+        const gap = 12;
+        // Use layout bounds so the rack's opening transform does not move the anchor.
+        const left = rack.offsetLeft - gap - width;
+        if (left >= 8) {
+            moveScopeWindow(left, rack.offsetTop);
+        } else {
+            // Reserve enough room for the scope; the rack's controls remain scrollable.
+            const available = Math.max(0, innerHeight - rack.offsetTop - height - gap - 8);
+            rack.style.setProperty('--scope-fx-max-height', `${available}px`);
+            rack.classList.add('scope-stacked');
+            moveScopeWindow(rack.offsetLeft + rack.offsetWidth - width, rack.offsetTop + rack.offsetHeight + gap);
+        }
+        return;
+    }
     const tools = document.querySelector('#stage-toolbar .stage-tools');
     const anchor = tools && tools.getClientRects().length ? tools.getBoundingClientRect() : null;
     const header = document.getElementById('transport-header').getBoundingClientRect();
     const right = anchor ? anchor.right : innerWidth - 18;
     const top = anchor ? anchor.bottom + 8 : header.bottom + 12;
-    moveScopeWindow(right - box.width, top);
+    moveScopeWindow(right - width, top);
 }
 function moveScopeWindow(x, y) {
-    const box = masterScope.windowEl.getBoundingClientRect();
-    const left = Math.max(8, Math.min(innerWidth - box.width - 8, x));
-    const top = Math.max(8, Math.min(innerHeight - box.height - 8, y));
+    const el = masterScope.windowEl;
+    const left = Math.max(8, Math.min(innerWidth - el.offsetWidth - 8, x));
+    const top = Math.max(8, Math.min(innerHeight - el.offsetHeight - 8, y));
     masterScope.windowEl.style.left = `${Math.round(left)}px`;
     masterScope.windowEl.style.top = `${Math.round(top)}px`;
 }
 function clampScopeWindow() {
-    const box = masterScope.windowEl.getBoundingClientRect();
-    moveScopeWindow(box.left, box.top);
+    const el = masterScope.windowEl;
+    moveScopeWindow(el.offsetLeft, el.offsetTop);
 }
 
 function initScopeWindowDrag() {

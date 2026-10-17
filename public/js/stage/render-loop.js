@@ -339,6 +339,7 @@ function animateLoop() {
     }
 
     if (renderer && scene && camera && songState.view === 'stage') {
+        updateStageCutaway();
         updateHUDProjections();
         renderer.render(scene, camera);
     }

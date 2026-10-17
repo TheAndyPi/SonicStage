@@ -3,6 +3,8 @@ let studioExperience = 'immersive';
 let studioTheme = document.documentElement.dataset.theme || 'light';
 let playfulReady = false;
 let proSongView = 'stage';
+let studioExperienceTransition = null;
+let studioExperienceRevision = 0;
 const studioPanels = { pro: { sounds: true, beats: true }, immersive: { sounds: true, beats: false } };
 try {
     if (localStorage.getItem('sonicstage-experience') === 'pro') studioExperience = 'pro';
@@ -116,6 +118,36 @@ function setStudioPanel(kind, open) {
 }
 function setStudioExperience(mode, persist = true) {
     const next = mode === 'pro' ? 'pro' : 'immersive';
+    const changing = next !== studioExperience || studioExperienceTransition;
+    const revision = ++studioExperienceRevision;
+    studioExperienceTransition?.skipTransition();
+    const update = () => {
+        if (revision !== studioExperienceRevision) return;
+        applyStudioExperience(next, persist);
+    };
+    if (!changing || !playfulReady || !studioStarted || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        update();
+        return;
+    }
+    if (!document.startViewTransition) {
+        update();
+        document.querySelectorAll('.control-bar, #stage-toolbar, #selector-tray-panel, #bottom-dock').forEach(el => {
+            el.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 280, easing: 'ease-out' });
+        });
+        return;
+    }
+    document.body.classList.add('experience-transition');
+    const transition = document.startViewTransition(update);
+    studioExperienceTransition = transition;
+    // A skipped snapshot still applies the requested layout. Consume its rejection on rapid toggles.
+    transition.ready.catch(() => {});
+    transition.finished.finally(() => {
+        if (studioExperienceTransition !== transition) return;
+        studioExperienceTransition = null;
+        document.body.classList.remove('experience-transition');
+    });
+}
+function applyStudioExperience(next, persist) {
     if (playfulReady && studioExperience === 'pro' && next === 'immersive') proSongView = songState.view;
     studioExperience = next;
     document.body.classList.toggle('immersive-mode', next === 'immersive');
@@ -139,6 +171,12 @@ function setStudioExperience(mode, persist = true) {
     setSongView(next === 'immersive' ? 'stage' : proSongView);
     renderTokenPalette();
     renderImmersiveBand();
+    // Resolve the new header and stage framing before the transition takes its next snapshot.
+    document.documentElement.style.setProperty(
+        '--header-height',
+        `${studioById('transport-header').getBoundingClientRect().height}px`,
+    );
+    if (document.body.classList.contains('experience-transition')) resizeStageViewport();
     syncStudioResizeHandle();
     if (persist)
         try {

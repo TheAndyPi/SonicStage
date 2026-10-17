@@ -138,6 +138,7 @@ window.onload = function () {
             proFxDrawer.classList.add('opacity-0', 'pointer-events-none', 'translate-y-2');
             proFxDrawer.classList.remove('opacity-100', 'pointer-events-auto', 'translate-y-0');
         }
+        if (masterScope.windowOpen) placeScopeWindow();
     }
     btnProFx.addEventListener('click', () => toggleProFxDrawer());
     btnCloseFx.addEventListener('click', () => toggleProFxDrawer(false));

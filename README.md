@@ -48,6 +48,7 @@ The compiled CSS is committed, so you can also serve the `public/` folder with a
 Some other things worth knowing:
 
 - Click a sound to add it to (or remove it from) the selected bar. Click a performer's label on stage to focus that track, or a track name in the beat editor to open its full controls.
+- Drag a performer or its label to move it. Models very close to the camera automatically clear out of the way so you can select players behind them; their pedestals and labels remain usable. Zoom out to reveal them again.
 - Drag the border beside **Sounds** or above the **Beat editor** to resize them. Double-click a divider or press <kbd>Home</kbd> to reset it.
 - Click the SonicStage wordmark to return to the start page, where **New**, **Open**, **Continue**, and **Generate** live.
 - Shortcuts work while buttons, sliders, and beat steps have focus. Text fields keep their normal typing and undo behavior.

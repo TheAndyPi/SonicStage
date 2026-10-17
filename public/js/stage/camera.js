@@ -51,6 +51,7 @@ function startCinematic() {
         };
         stopSong();
         cinematicState.active = true;
+        setScopeWindowOpen(false);
         setSongView('stage');
         document.body.classList.add('cinematic-mode');
         document.getElementById('cinematic-overlay').hidden = false;
@@ -284,10 +285,36 @@ function stagePlayersLocked() {
     return cinematicState.active || document.body.classList.contains('home-open');
 }
 
-function pickStageSlot(clientX, clientY) {
+// Clear models that fill the foreground when orbiting through the ensemble.
+// Keep their pedestals and labels available, without changing pooled materials.
+function updateStageCutaway() {
+    const enabled = !stagePlayersLocked();
+    for (const ped of pedestalMeshes) {
+        if (!ped) continue;
+        _tempVec3.copy(ped.rootGroup.position);
+        _tempVec3.y += 0.9 * ped.baseScale;
+        const distance = camera.position.distanceTo(_tempVec3) / ped.baseScale;
+        // Separate entry/exit distances prevent flicker at the boundary.
+        ped.cameraCutaway = enabled && distance < (ped.cameraCutaway ? 3.2 : 2.8);
+        ped.performerGroup.visible = !ped.cameraCutaway;
+        for (const outgoing of ped.departingPerformers) outgoing.visible = !ped.cameraCutaway;
+        if (ped.cameraCutaway && ped.effectVisuals) ped.effectVisuals.visible = false;
+    }
+}
+
+function pickStageSlot(clientX, clientY, excludeSlot = -1) {
+    const bounds = renderer.domElement.getBoundingClientRect();
+    if (clientX < bounds.left || clientX > bounds.right || clientY < bounds.top || clientY > bounds.bottom) return -1;
     setStagePointer(clientX, clientY);
     raycaster.setFromCamera(mouseNDC, camera);
-    const activeProxies = pedestalHitProxies.slice(0, stageState.unlockedSlots).filter(Boolean);
+    const activeProxies = [];
+    for (let i = 0; i < stageState.unlockedSlots; i++) {
+        if (i === excludeSlot) continue;
+        const ped = pedestalMeshes[i];
+        if (!ped?.rootGroup.visible) continue;
+        // A hidden model must not intercept a click intended for a player behind it.
+        activeProxies.push(ped.cameraCutaway ? ped.baseCyl : pedestalHitProxies[i]);
+    }
     const hit = raycaster.intersectObjects(activeProxies, false)[0];
     return hit?.object.userData.slotIndex ?? -1;
 }
@@ -355,7 +382,7 @@ function onStagePointerMove(e) {
             const ghost = document.getElementById('drag-ghost');
             ghost.style.left = `${e.clientX}px`;
             ghost.style.top = `${e.clientY}px`;
-            appState.hoveredSlotIndex = pickStageSlot(e.clientX, e.clientY);
+            appState.hoveredSlotIndex = pickStageSlot(e.clientX, e.clientY, playerDrag.from);
             setDropTarget(appState.hoveredSlotIndex);
         }
         return;
@@ -385,14 +412,9 @@ function onStagePointerUp(e) {
     if (e.target === renderer.domElement && !appState.draggedPresetId) {
         const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
         if (dist < 5) {
-            setStagePointer(e.clientX, e.clientY);
-            raycaster.setFromCamera(mouseNDC, camera);
-
-            const activeProxies = pedestalHitProxies.slice(0, stageState.unlockedSlots).filter(Boolean);
-            const intersects = raycaster.intersectObjects(activeProxies, false);
-            if (intersects.length > 0) {
-                const slotIdx = intersects[0].object.userData.slotIndex;
-                if (slotIdx !== undefined && stageState.slots[slotIdx].preset) {
+            const slotIdx = pickStageSlot(e.clientX, e.clientY);
+            if (slotIdx >= 0) {
+                if (stageState.slots[slotIdx].preset) {
                     if (typeof studioExperience !== 'undefined' && studioExperience === 'immersive') {
                         editStageMeasure();
                         openTrackControls(slotIdx);
@@ -405,17 +427,8 @@ function onStagePointerUp(e) {
 }
 
 function checkPedestalHover(clientX, clientY) {
-    setStagePointer(clientX, clientY);
-    raycaster.setFromCamera(mouseNDC, camera);
-
-    const activeProxies = pedestalHitProxies.slice(0, stageState.unlockedSlots).filter(Boolean);
-    const intersects = raycaster.intersectObjects(activeProxies, false);
     const prevHover = appState.hoveredSlotIndex;
-    if (intersects.length > 0 && intersects[0].object.userData.slotIndex !== undefined) {
-        appState.hoveredSlotIndex = intersects[0].object.userData.slotIndex;
-    } else {
-        appState.hoveredSlotIndex = -1;
-    }
+    appState.hoveredSlotIndex = pickStageSlot(clientX, clientY);
     if (prevHover !== appState.hoveredSlotIndex && stageState.unlockedSlots > 12) {
         // Update visibility of hovered outer-ring HUD badge without full DOM rebuild
         [prevHover, appState.hoveredSlotIndex].forEach(idx => {

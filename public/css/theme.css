@@ -189,6 +189,44 @@ img.brand-mark {
 .experience-switch button[data-experience-option='immersive'][aria-pressed='true'] {
     background: var(--chip-blue);
 }
+/* Snapshot the two layouts so fixed controls can travel between the header and floating dock. */
+body.experience-transition #transport-header {
+    view-transition-name: studio-header;
+}
+body.experience-transition .control-bar {
+    view-transition-name: studio-transport;
+}
+body.experience-transition #selector-tray-panel {
+    view-transition-name: studio-library;
+}
+body.experience-transition #bottom-dock {
+    view-transition-name: studio-beats;
+}
+body.experience-transition #stage-toolbar {
+    view-transition-name: studio-camera;
+}
+body.experience-transition #immersive-heading {
+    view-transition-name: studio-heading;
+}
+body.experience-transition #pedestal-hud-layer,
+body.experience-transition #song-workspace,
+body.experience-transition #selector-tray-panel,
+body.experience-transition #bottom-dock,
+body.experience-transition #stage-toolbar {
+    transition: none !important;
+}
+::view-transition-group(*) {
+    animation-duration: 340ms;
+    animation-timing-function: var(--panel-ease);
+}
+::view-transition-old(*),
+::view-transition-new(*) {
+    animation-duration: 280ms;
+    animation-timing-function: ease-in-out;
+}
+::view-transition {
+    pointer-events: none;
+}
 .control-bar {
     gap: 12px;
 }
@@ -602,6 +640,39 @@ body.immersive-mode .studio-token {
         600 10px 'IBM Plex Mono',
         monospace;
     color: var(--ink);
+}
+/* Taller sound strips can put player controls beneath the name without squeezing it. */
+body.immersive-mode #token-palette {
+    container: sound-strip / size;
+}
+body.immersive-mode .studio-token {
+    --sound-icon-width: 32px;
+}
+@media (max-width: 640px) {
+    #token-palette {
+        container: sound-strip / size;
+    }
+    .studio-token {
+        --sound-icon-width: 24px;
+    }
+    body.immersive-mode .studio-token {
+        --sound-icon-width: 26px;
+    }
+}
+@container sound-strip (min-height: 90px) {
+    .studio-token.is-active {
+        display: grid;
+        grid-template-columns: var(--sound-icon-width) minmax(0, 1fr);
+        align-content: center;
+        row-gap: 6px;
+    }
+    .studio-token.is-active .sound-main {
+        grid-column: 1 / -1;
+    }
+    .studio-token.is-active .sound-stepper {
+        grid-column: 2;
+        justify-self: start;
+    }
 }
 #measure-context {
     color: var(--ink);

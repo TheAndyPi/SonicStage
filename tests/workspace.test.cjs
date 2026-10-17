@@ -101,6 +101,127 @@ assert.ok(
 );
 assert.ok(paints >= 150);
 
+// Use real geometry and raycasts to reproduce a foreground performer blocking another.
+const selectionScene = new THREE.Scene();
+const selectionCamera = new THREE.PerspectiveCamera(40, 1, 0.1, 120);
+const selectionPedestals = [];
+const selectionProxies = [];
+for (let index = 0; index < 2; index++) {
+    const rootGroup = new THREE.Group();
+    rootGroup.position.z = index === 0 ? 3.4 : 0;
+    const proxy = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1.85, 12));
+    proxy.position.y = 0.75;
+    proxy.userData.slotIndex = index;
+    const baseCyl = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.16, 12));
+    baseCyl.position.y = -0.08;
+    baseCyl.userData.slotIndex = index;
+    rootGroup.add(proxy, baseCyl);
+    selectionScene.add(rootGroup);
+    selectionPedestals.push({
+        rootGroup,
+        baseCyl,
+        baseScale: 1,
+        performerGroup: new THREE.Group(),
+        departingPerformers: [new THREE.Group()],
+        effectVisuals: new THREE.Group(),
+    });
+    selectionProxies.push(proxy);
+}
+selectionScene.updateMatrixWorld(true);
+const selectionState = { unlockedSlots: 2, slots: [{ preset: {} }, { preset: {} }] };
+const selectionApp = { hoveredSlotIndex: -1 };
+const selectionClasses = new Set();
+const selectionCanvas = { getBoundingClientRect: () => ({ left: 0, top: 0, right: 600, bottom: 600 }) };
+const selection = vm.createContext({
+    camera: selectionCamera,
+    raycaster: new THREE.Raycaster(),
+    mouseNDC: new THREE.Vector2(),
+    _tempVec3: new THREE.Vector3(),
+    pedestalMeshes: selectionPedestals,
+    pedestalHitProxies: selectionProxies,
+    stageState: selectionState,
+    appState: selectionApp,
+    renderer: { domElement: selectionCanvas },
+    cinematicState: { active: false },
+    document: { body: { classList: { contains: name => selectionClasses.has(name) } } },
+    playerDrag: null,
+    controls: { enabled: true },
+    pointerDownPos: {},
+});
+selection.setStagePointer = (x, y) => selection.mouseNDC.set((x / 600) * 2 - 1, -(y / 600) * 2 + 1);
+for (const name of [
+    'stagePlayersLocked',
+    'updateStageCutaway',
+    'pickStageSlot',
+    'checkPedestalHover',
+    'beginPlayerDrag',
+    'onStagePointerDown',
+    'onStagePointerUp',
+])
+    vm.runInContext(productionFunction(name), selection);
+function placeSelectionCamera(z) {
+    selectionCamera.position.set(0, 0.9, z);
+    selectionCamera.lookAt(0, 0.9, 0);
+    selectionCamera.updateMatrixWorld(true);
+    selection.updateStageCutaway();
+}
+placeSelectionCamera(8);
+assert.equal(selection.pickStageSlot(300, 300), 0, 'normal picking still selects the front player');
+assert.equal(selection.pickStageSlot(300, 300, 0), 1, 'the dragged source cannot block a destination behind it');
+placeSelectionCamera(5);
+assert.equal(selectionPedestals[0].performerGroup.visible, false, 'close models clear the foreground');
+assert.equal(selectionPedestals[0].departingPerformers[0].visible, false, 'departing models clear too');
+assert.equal(selectionPedestals[0].effectVisuals.visible, false, 'effect halos cannot obscure the rear player');
+assert.equal(selectionPedestals[1].performerGroup.visible, true);
+assert.equal(selection.pickStageSlot(300, 300), 1, 'click through the cleared model to the rear player');
+selection.checkPedestalHover(300, 300);
+assert.equal(selectionApp.hoveredSlotIndex, 1, 'drag and effect hover use the same cutaway picking');
+selection.onStagePointerDown({ target: selectionCanvas, button: 0, clientX: 300, clientY: 300 });
+assert.equal(selection.playerDrag.from, 1, 'dragging starts on the intended rear player');
+assert.equal(selection.controls.enabled, false);
+selection.playerDrag = null;
+let selectedPlayer = -1;
+selection.toggleSlotMute = index => (selectedPlayer = index);
+selectionApp.slots = selectionState.slots;
+selection.onStagePointerUp({ target: selectionCanvas, clientX: 300, clientY: 300 });
+assert.equal(selectedPlayer, 1, 'click actions agree with drag selection');
+selectionCamera.lookAt(0, -0.08, 3.4);
+selectionCamera.updateMatrixWorld(true);
+assert.equal(selection.pickStageSlot(300, 300), 0, 'the cleared player remains selectable via its pedestal');
+placeSelectionCamera(6.4);
+assert.equal(selectionPedestals[0].cameraCutaway, true, 'the exit buffer prevents flicker');
+placeSelectionCamera(6.8);
+assert.equal(selectionPedestals[0].performerGroup.visible, true, 'models return when the camera backs away');
+placeSelectionCamera(6.4);
+assert.equal(selectionPedestals[0].cameraCutaway, false, 'the entry buffer prevents flicker');
+placeSelectionCamera(5);
+selectionState.unlockedSlots = 1;
+assert.equal(selection.pickStageSlot(300, 300), -1, 'locked slots cannot be selected through the cutaway');
+selectionState.unlockedSlots = 2;
+selectionPedestals[1].rootGroup.visible = false;
+assert.equal(selection.pickStageSlot(300, 300), -1, 'hidden pedestals cannot intercept clicks');
+selectionPedestals[1].rootGroup.visible = true;
+assert.equal(selection.pickStageSlot(-1, 300), -1, 'drops outside the canvas are ignored');
+selection.cinematicState.active = true;
+selection.updateStageCutaway();
+assert.ok(
+    selectionPedestals.every(ped => ped.performerGroup.visible),
+    'showcase keeps every model',
+);
+selection.cinematicState.active = false;
+selectionClasses.add('home-open');
+selection.updateStageCutaway();
+assert.ok(
+    selectionPedestals.every(ped => ped.performerGroup.visible),
+    'the landing stage keeps every model',
+);
+selectionClasses.clear();
+selectionPedestals[0].baseScale = 0.82;
+placeSelectionCamera(6);
+assert.equal(selectionPedestals[0].cameraCutaway, false, 'smaller outer-ring models use a smaller clearance');
+placeSelectionCamera(5);
+assert.equal(selectionPedestals[0].cameraCutaway, true);
+
 const actions = [];
 const bodyClasses = new Set();
 let dialogOpen = false;
@@ -232,5 +353,5 @@ stageMenu.open = true;
 documentListeners.get('pointerdown')({ target: outside });
 assert.ok(!stageMenu.open, 'tapping outside still dismisses the menu');
 console.log(
-    'Passed: 150 camera layout changes, projection placement, clipping limits, zero-size recovery, buffer reuse, global shortcuts with focused controls, and touch menu dismissal.',
+    'Passed: 150 camera layout changes, projection placement, clipping limits, zero-size recovery, buffer reuse, foreground cutaway selection and dragging, global shortcuts with focused controls, and touch menu dismissal.',
 );
