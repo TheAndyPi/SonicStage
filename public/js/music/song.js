@@ -17,6 +17,9 @@ const songState = {
     saveTimer: null,
     projectId: null,
 };
+// Cache the sheet once per edit; transport updates only touch two columns.
+const songSheetDOM = { columns: [], selected: -1, playing: -1, step: -1, dirty: true, measures: null };
+
 function newProjectId() {
     return crypto.randomUUID?.() || `p-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -176,6 +179,7 @@ function songDocument() {
         rootKey: appState.rootKey,
         scaleMode: appState.scaleMode,
         globalSwing: appState.globalSwing,
+        masterEffects: normalizePerformerEffects(appState.masterEffects),
         loop: songState.loop,
         selected: songState.selected,
         measures: songState.measures.map(measure => ({
@@ -222,6 +226,24 @@ function readSongDocument(data) {
         (data.timeSignature !== undefined && !Object.hasOwn(TIME_SIGNATURES, data.timeSignature))
     )
         throw new Error('Invalid song tempo, meter, or harmony.');
+    const readEffects = (effects, target) => {
+        if (
+            effects !== undefined &&
+            (!Array.isArray(effects) ||
+                effects.length > MAX_PERFORMER_EFFECTS ||
+                effects.some(
+                    effect =>
+                        !effect ||
+                        !PERFORMER_EFFECT_BY_ID.has(effect.id) ||
+                        !finite(effect.amount, 0, 1) ||
+                        typeof effect.enabled !== 'boolean',
+                ) ||
+                new Set(effects.map(effect => effect.id)).size !== effects.length)
+        )
+            throw new Error(`Invalid ${target} effects.`);
+        return normalizePerformerEffects(effects);
+    };
+    const masterEffects = readEffects(data.masterEffects, 'master');
     // Build and validate the entire document before replacing the current song.
     const measures = data.measures.map(raw => {
         if (!raw || typeof raw.label !== 'string' || !Array.isArray(raw.slots) || raw.slots.length > MAX_SLOTS)
@@ -264,20 +286,7 @@ function readSongDocument(data) {
                                 (typeof v === 'string' && v.length <= 16) ||
                                 (Array.isArray(v) && v.length <= 16 && v.every(validNote))),
                     ));
-            if (
-                saved.effects !== undefined &&
-                (!Array.isArray(saved.effects) ||
-                    saved.effects.length > MAX_PERFORMER_EFFECTS ||
-                    saved.effects.some(
-                        effect =>
-                            !effect ||
-                            !PERFORMER_EFFECT_BY_ID.has(effect.id) ||
-                            !finite(effect.amount, 0, 1) ||
-                            typeof effect.enabled !== 'boolean',
-                    ) ||
-                    new Set(saved.effects.map(effect => effect.id)).size !== saved.effects.length)
-            )
-                throw new Error('Invalid performer effects.');
+            readEffects(saved.effects, 'performer');
             if (!saved.steps.every(validStep)) throw new Error('Invalid beat data.');
             used.add(saved.index);
             Object.assign(measure.slots[saved.index], {
@@ -294,7 +303,7 @@ function readSongDocument(data) {
         });
         return measure;
     });
-    return { ...data, timeSignature: data.timeSignature || '4/4', measures };
+    return { ...data, timeSignature: data.timeSignature || '4/4', masterEffects, measures };
 }
 
 function applySongDocument(data) {
@@ -315,6 +324,8 @@ function applySongDocument(data) {
     appState.rootKey = data.rootKey;
     appState.scaleMode = data.scaleMode;
     appState.globalSwing = data.globalSwing;
+    appState.masterEffects = normalizePerformerEffects(data.masterEffects);
+    audioEngine.setMasterEffects(appState.masterEffects);
     document.getElementById('bpm-number-input').value = data.bpm;
     document.getElementById('bpm-slider').value = bpmToSlider(data.bpm);
     applyMeterLayout();
@@ -339,6 +350,7 @@ function saveSongLocally() {
 }
 
 function songChanged() {
+    songSheetDOM.dirty = true;
     if (!songState.ready) return;
     document.getElementById('song-save-status').textContent = 'Saving…';
     clearTimeout(songState.saveTimer);
@@ -347,7 +359,7 @@ function songChanged() {
         songState.renderFrame = requestAnimationFrame(() => {
             songState.renderFrame = null;
             syncStageToMeasure();
-            renderSongArrangement();
+            renderSongArrangement(false);
         });
 }
 
@@ -357,8 +369,8 @@ function selectSongMeasure(index, reveal = false) {
     appState.slots = songState.measures[index].slots;
     // The editor selection never changes the song playback position.
     reconcileStageCapacity(false);
-    refreshAllUI();
-    renderSongArrangement();
+    refreshAllUI(false);
+    renderSongArrangement(false);
     if (reveal)
         document
             .querySelector(`[data-measure-index="${index}"]`)
@@ -371,7 +383,7 @@ function setSongView(view) {
     document.getElementById('song-workspace').hidden = view !== 'song';
     document.getElementById('btn-stage-view').setAttribute('aria-pressed', view === 'stage');
     document.getElementById('btn-song-view').setAttribute('aria-pressed', view === 'song');
-    renderSongArrangement();
+    renderSongArrangement(false);
     if (appState.libraryTab === 'effects') renderEffectsLibrary();
     if (view === 'stage') onWindowResize();
 }
@@ -389,6 +401,7 @@ function insertSongMeasures(empty, count = 1) {
         0,
         ...Array.from({ length: copies }, () => cloneMeasure(source, empty)),
     );
+    songChanged();
     selectSongMeasure(songState.selected + 1, true);
 }
 
@@ -408,7 +421,7 @@ function playSongFrom(index) {
     resetSongTransport(index);
     appState.isPlaying = true;
     updatePlayButtonUI();
-    renderSongArrangement();
+    renderSongArrangement(false);
 }
 
 // Moves the editor and the playhead together, so the stage shows the bar you picked.
@@ -419,7 +432,7 @@ function goToSongMeasure(index) {
     else {
         resetSongTransport(index);
         updatePlayButtonUI();
-        renderSongArrangement();
+        renderSongArrangement(false);
     }
 }
 
@@ -437,7 +450,7 @@ function toggleMeasureLoop() {
         appState.isPlaying = true;
     }
     updatePlayButtonUI();
-    renderSongArrangement();
+    renderSongArrangement(false);
 }
 
 function stopSong() {
@@ -510,20 +523,44 @@ function updateSongPlayhead() {
         : appState.isPlaying
           ? 'Ready'
           : 'Stopped / paused';
-    document
-        .querySelectorAll('#song-sheet th.is-playing, #song-sheet td.is-playing-step')
-        .forEach(el => el.classList.remove('is-playing', 'is-playing-step'));
-    document.querySelectorAll('#song-sheet .playing-step').forEach(el => el.classList.remove('playing-step'));
-    if (measureIndex >= 0 && songState.view === 'song') {
-        document.querySelector(`#song-sheet th[data-measure-index="${measureIndex}"]`)?.classList.add('is-playing');
-        document.querySelectorAll(`#song-sheet td[data-measure-index="${measureIndex}"]`).forEach(cell => {
-            cell.classList.add('is-playing-step');
-            cell.querySelector(`.song-clip span:nth-child(${step + 1})`)?.classList.add('playing-step');
+    const nextPlaying = songState.view === 'song' ? measureIndex : -1;
+    if (songSheetDOM.playing === nextPlaying && songSheetDOM.step === step) return;
+    const previous = songSheetDOM.columns[songSheetDOM.playing];
+    const next = songSheetDOM.columns[nextPlaying];
+    if (previous) {
+        if (previous !== next) previous.header?.classList.remove('is-playing');
+        previous.cells.forEach(({ cell, steps }) => {
+            if (previous !== next) cell.classList.remove('is-playing-step');
+            steps?.[songSheetDOM.step]?.classList.remove('playing-step');
         });
     }
+    if (next) {
+        if (previous !== next) next.header?.classList.add('is-playing');
+        next.cells.forEach(({ cell, steps }) => {
+            if (previous !== next) cell.classList.add('is-playing-step');
+            steps?.[step]?.classList.add('playing-step');
+        });
+    }
+    songSheetDOM.playing = nextPlaying;
+    songSheetDOM.step = step;
 }
 
-function renderSongArrangement() {
+function updateSongSheetSelection() {
+    if (songSheetDOM.selected === songState.selected) return;
+    const select = (index, active) => {
+        const column = songSheetDOM.columns[index];
+        if (!column) return;
+        column.header?.classList.toggle('is-selected', active);
+        column.header?.querySelector('.measure-select')?.setAttribute('aria-pressed', String(active));
+        column.cells.forEach(({ cell }) => cell.classList.toggle('is-selected', active));
+    };
+    select(songSheetDOM.selected, false);
+    select(songState.selected, true);
+    songSheetDOM.selected = songState.selected;
+}
+
+function renderSongArrangement(rebuild = true) {
+    if (rebuild) songSheetDOM.dirty = true;
     updateTransportPosition();
     const selected = songState.measures[songState.selected];
     document.getElementById('measure-editing-label').textContent =
@@ -550,6 +587,11 @@ function renderSongArrangement() {
         s % stepsPerBeat === 0 ? s / stepsPerBeat + 1 : '·',
     ).join(' ');
     if (songState.view !== 'song') return;
+    if (!songSheetDOM.dirty && songSheetDOM.measures === songState.measures) {
+        updateSongSheetSelection();
+        updateSongPlayhead();
+        return;
+    }
     const escape = value =>
         String(value).replace(
             /[&<>"']/g,
@@ -581,7 +623,20 @@ function renderSongArrangement() {
     });
     if (!rows.length)
         html += `<tr><td colspan="${measures.length + 1}" class="text-slate-400 p-6"><p style="padding:24px">Add a sound or generate a song to start.</p></td></tr>`;
-    document.getElementById('song-sheet').innerHTML = html + '</tbody>';
+    const sheet = document.getElementById('song-sheet');
+    sheet.innerHTML = html + '</tbody>';
+    songSheetDOM.columns = [];
+    sheet.querySelectorAll('[data-measure-index]').forEach(cell => {
+        const index = Number(cell.dataset.measureIndex);
+        const column = (songSheetDOM.columns[index] ||= { header: null, cells: [] });
+        if (cell.tagName === 'TH') column.header = cell;
+        else column.cells.push({ cell, steps: cell.querySelector('.song-clip')?.children });
+    });
+    songSheetDOM.measures = measures;
+    songSheetDOM.dirty = false;
+    songSheetDOM.selected = songState.selected;
+    songSheetDOM.playing = -1;
+    songSheetDOM.step = -1;
     fitSongSheet();
     updateSongPlayhead();
 }
@@ -655,6 +710,7 @@ function moveSongMeasure(from, to) {
     if (typeof checkpointSong === 'function') checkpointSong();
     const [measure] = songState.measures.splice(from, 1);
     songState.measures.splice(to, 0, measure);
+    songChanged();
     selectSongMeasure(to, true);
 }
 
@@ -804,6 +860,7 @@ function initSongComposer() {
             if (target < 0 || target >= songState.measures.length) return;
             const [measure] = songState.measures.splice(songState.selected, 1);
             songState.measures.splice(target, 0, measure);
+            songChanged();
             selectSongMeasure(target, true);
         }),
     );
@@ -818,6 +875,7 @@ function initSongComposer() {
             songState.selected = index;
             stopSong();
         }
+        songChanged();
         selectSongMeasure(index, true);
     });
     bind('song-play-start', () => playSongFrom(0));
@@ -866,6 +924,7 @@ function initSongComposer() {
             applySongDocument(data);
             resetSongTransport();
             audioEngine.updateDelaySync();
+            songChanged();
             selectSongMeasure(songState.selected, true);
             enterStudio();
             saveSongLocally();

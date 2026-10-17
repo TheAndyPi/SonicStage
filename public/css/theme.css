@@ -1576,6 +1576,9 @@ body.cinematic-mode #canvas-container {
 /* Compact screens retain the full song; only its controls change places. */
 @media (max-width: 1380px) {
     .output-meter {
+        display: flex;
+    }
+    .output-meter .db-readout {
         display: none;
     }
     .project-bar {
@@ -1642,11 +1645,12 @@ body.cinematic-mode #canvas-container {
     }
     .project-bar {
         display: grid;
-        grid-template-columns: 1fr auto auto;
-        grid-template-rows: 35px 29px;
-        height: 82px;
-        gap: 2px 10px;
+        grid-template-columns: minmax(0, 1fr) 154px 32px;
+        grid-template-rows: 42px 29px;
+        height: 90px;
+        gap: 4px 8px;
         padding: 6px 12px;
+        align-content: center;
     }
     .project-bar > .wordmark {
         grid-column: 1;
@@ -1660,17 +1664,25 @@ body.cinematic-mode #canvas-container {
     .project-bar .experience-switch {
         grid-column: 2;
         grid-row: 1;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        min-width: 150px;
+        width: 100%;
+        padding: 3px;
+        gap: 2px;
+        border-radius: 11px;
     }
     .project-bar > .theme-toggle {
         grid-column: 3;
         grid-row: 1;
-        width: 29px;
-        height: 29px;
+        width: 32px;
+        height: 32px;
     }
     .project-name {
         grid-column: 1;
         grid-row: 2;
         margin: 0;
+        padding-right: 12px;
     }
     .project-name input {
         width: 100%;
@@ -1697,15 +1709,19 @@ body.cinematic-mode #canvas-container {
         min-height: 26px;
         padding: 3px;
     }
-    .experience-switch {
-        padding: 2px;
-        border-radius: 9px;
+    .project-bar .experience-switch button {
+        min-width: 0;
+        min-height: 34px;
+        padding: 6px;
+        font-size: 11px;
+        line-height: 1;
+        letter-spacing: 0;
+        border-radius: 8px;
+        white-space: nowrap;
+        touch-action: manipulation;
     }
-    .experience-switch button {
-        min-height: 24px;
-        padding: 3px 7px;
-        font-size: 9px;
-        border-radius: 7px;
+    .experience-mark {
+        display: none;
     }
     body:not(.immersive-mode) .control-bar {
         height: 123px;
@@ -1714,14 +1730,49 @@ body.cinematic-mode #canvas-container {
     }
     body:not(.immersive-mode) .panel-switches {
         grid-row: 3;
-        grid-column: 1/13;
+        grid-column: 1/10;
         justify-content: flex-start;
         gap: 7px;
     }
     body:not(.immersive-mode) .panel-switches button {
         min-height: 25px;
         font-size: 10px;
-        padding: 3px 10px;
+        padding: 3px 6px;
+    }
+    body:not(.immersive-mode) .control-bar .output-meter {
+        display: flex;
+        grid-row: 3;
+        grid-column: 10/13;
+        justify-self: end;
+        align-self: center;
+        width: 100%;
+        max-width: 84px;
+        min-width: 0;
+        padding-left: 6px;
+    }
+    body:not(.immersive-mode) .output-meter .scope-screen {
+        width: 100%;
+        height: 26px;
+        flex: 1;
+    }
+    .scope-window-bar {
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    .scope-window-bar > span {
+        display: none;
+    }
+    .scope-window-modes {
+        flex: 1;
+        margin-left: 0;
+    }
+    .scope-window-modes button {
+        flex: 1;
+        padding: 5px 3px;
+        font-size: 9px;
+    }
+    #scope-window-close {
+        flex: none;
     }
     #transport-position {
         height: auto;
@@ -1835,9 +1886,9 @@ body.cinematic-mode #canvas-container {
         border-radius: 17px;
     }
     body.immersive-mode .project-bar {
-        height: 86px;
-        padding: 8px 14px;
-        gap: 2px 9px;
+        height: 90px;
+        padding: 6px 12px;
+        gap: 4px 8px;
     }
     body.immersive-mode .project-name input {
         width: 100%;
@@ -2070,14 +2121,9 @@ body.cinematic-mode #canvas-container {
         height: 27px;
         margin-right: 0;
     }
-    .experience-switch button {
-        font-size: 8px;
-        padding-left: 6px;
-        padding-right: 6px;
-    }
-    .project-bar > .theme-toggle {
-        width: 26px;
-        height: 26px;
+    .project-bar .brand-name,
+    .project-bar .brand-dot {
+        display: none;
     }
     body.immersive-mode .control-bar {
         gap: 6px;

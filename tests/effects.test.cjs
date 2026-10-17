@@ -156,6 +156,46 @@ run('appState.bpm = 112;');
 audioContext.currentTime += 0.3;
 while (timers.length) timers.shift()();
 
+// The master inserts replace only the DJ-filter-to-output edge; player channels stay isolated.
+run(`audioEngine.djFilterNode = testContext.createBiquadFilter();
+    audioEngine.masterGain = testContext.createGain();
+    audioEngine.limiter = testContext.createGain();
+    audioEngine.djFilterNode.connect(audioEngine.masterGain);
+    audioEngine.masterGain.connect(audioEngine.limiter);
+    var untouchedPlayerRack = audioEngine.slotEffectRacks[0];
+    audioEngine.setMasterEffects([]);`);
+assert.equal(run('audioEngine.masterEffectRack'), null, 'empty masters allocate no rack');
+for (const id of run('PERFORMER_EFFECTS.map(effect => effect.id)')) {
+    context.effectId = id;
+    run(`audioEngine.setMasterEffects([{id:effectId,amount:.8,enabled:true}]);`);
+    const rack = run('audioEngine.masterEffectRack.rack');
+    assert.ok(run('audioEngine.djFilterNode.connections.has(audioEngine.masterEffectRack.rack.input)'));
+    assert.ok(rack.output.connections.has(run('audioEngine.masterGain')));
+    assert.ok(run('!audioEngine.djFilterNode.connections.has(audioEngine.masterGain)'), 'no dry bypass around master');
+    assert.ok(
+        run('audioEngine.masterGain.connections.has(audioEngine.limiter)'),
+        'output protection remains connected',
+    );
+    assert.ok(run('audioEngine.slotEffectRacks[0] === untouchedPlayerRack'), 'master edits leave player racks alone');
+    run(`audioEngine.setMasterEffects([{id:effectId,amount:.2,enabled:true}]);`);
+    assert.equal(run('audioEngine.masterEffectRack.rack'), rack, 'master faders reuse processors');
+    run(`audioEngine.setMasterEffects([{id:effectId,amount:.2,enabled:false}]);`);
+    assert.equal(run('audioEngine.masterEffectRack.key'), '', 'master bypass removes the processor');
+    audioContext.currentTime += 0.3;
+    while (timers.length) timers.shift()();
+    assert.equal(rack.nodes.length, 0, 'retired master nodes are disposed');
+    assert.equal(run('audioEngine.djFilterNode.connections.size'), 1, 'one current signal path after retirement');
+}
+run(`appState.masterEffects = [{id:'echo',amount:.6,enabled:true}];
+    audioEngine.setMasterEffects(appState.masterEffects);
+    appState.bpm = 120; audioEngine.updateDelaySync();`);
+assert.equal(
+    run(`audioEngine.masterEffectRack.rack.nodes.find(node => node.type === 'Delay').delayTime.value`),
+    0.25,
+    'master repeats follow tempo changes during playback',
+);
+run(`appState.masterEffects = [{id:'chorus',amount:.6,enabled:true}, {id:'air',amount:.3,enabled:false}];`);
+
 // Persistence, duplication, and legacy files all use the production schema.
 run(`assignTestPlayer = () => {
     const slot = appState.slots[0]; slot.preset = INSTRUMENT_PRESETS[0];
@@ -167,6 +207,11 @@ assert.equal(
     run('JSON.stringify(restored.measures[0].slots[0].effects)'),
     run('JSON.stringify(appState.slots[0].effects)'),
 );
+assert.equal(run('JSON.stringify(restored.masterEffects)'), run('JSON.stringify(appState.masterEffects)'));
+run(`restored.masterEffects[0].amount = .1;`);
+assert.equal(run('appState.masterEffects[0].amount'), 0.6, 'imported master chains are independent');
+run(`var legacyMaster = structuredClone(saved); delete legacyMaster.masterEffects;`);
+assert.equal(run('readSongDocument(legacyMaster).masterEffects.length'), 0, 'legacy songs default to a dry master');
 run(`var duplicated = cloneMeasure(songState.measures[0]); duplicated.slots[0].effects[0].amount = .1;`);
 assert.equal(run('appState.slots[0].effects[0].amount'), 0.73, 'duplicate bars own their effects');
 assert.equal(run('cloneMeasure(songState.measures[0], true).slots[0].effects.length'), 0);
@@ -186,6 +231,11 @@ for (const invalid of [
         () => run(`saved.measures[0].slots[0].effects = invalid; readSongDocument(saved);`),
         /Invalid performer effects/,
     );
+    assert.throws(
+        () => run(`saved.masterEffects = invalid; saved.measures[0].slots[0].effects = []; readSongDocument(saved);`),
+        /Invalid master effects/,
+    );
+    run('saved.masterEffects = [];');
 }
 
 // Stage accents follow the same enabled/amount state and retain pooled geometry.
@@ -245,5 +295,5 @@ assert.equal(run('dragStarted.id'), 'hall');
 assert.equal(run('dragStarted.y'), 500);
 assert.equal(windowListeners.size, 0, 'press listeners are removed when dragging starts');
 console.log(
-    'Passed: all 21 effect graphs, amount reuse, channel isolation, bypass, LFO disposal, persistence, legacy songs, invalid imports, copied bars, and 3D accents.',
+    'Passed: all 21 effect graphs, amount reuse, channel isolation, master routing and tempo sync, bypass, LFO disposal, persistence, legacy songs, invalid imports, copied bars, and 3D accents.',
 );

@@ -120,6 +120,7 @@ const appState = {
     libraryTab: 'sounds',
     effectsCategory: 'all',
     effectsScope: 'player',
+    masterEffects: [],
     effectsSlotIndex: -1,
     draggedEffectId: null,
     selectedCategory: 'all',

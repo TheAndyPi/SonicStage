@@ -112,6 +112,9 @@ function animateLoop() {
     sampleStageAnalyser();
     drawMasterScope(dt, elapsed, reducedStageMotion);
 
+    // Arrange mode keeps transport and metering live without animating the hidden stage.
+    if (songState.view !== 'stage' && !cinematicState.active) return;
+
     // 2. Audio-Reactive Radial Floor EQ Bars + Central Harmonic Gyroscope Core
     let avgAudioEnergy = 0;
     if (audioEngine.analyser && appState.isPlaying) {

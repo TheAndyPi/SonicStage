@@ -163,7 +163,7 @@ function initPlayfulStudio() {
     experience.setAttribute('role', 'group');
     experience.setAttribute('aria-label', 'Studio experience');
     experience.innerHTML =
-        '<button type="button" data-experience-option="immersive" aria-pressed="true">✦ Immersive</button><button type="button" data-experience-option="pro" aria-pressed="false">Pro</button>';
+        '<button type="button" data-experience-option="immersive" aria-pressed="true"><span class="experience-mark" aria-hidden="true">✦ </span>Immersive</button><button type="button" data-experience-option="pro" aria-pressed="false">Pro</button>';
     const projectBar = document.querySelector('.project-bar');
     projectBar.insertBefore(experience, projectBar.querySelector('.project-actions'));
     experience
@@ -191,7 +191,7 @@ function initPlayfulStudio() {
     const effectsButton = document.createElement('button');
     effectsButton.id = 'btn-effects';
     effectsButton.type = 'button';
-    effectsButton.title = 'Performer effects';
+    effectsButton.title = 'Player, bar, and master effects';
     effectsButton.setAttribute('aria-controls', 'selector-tray-panel');
     effectsButton.setAttribute('aria-expanded', 'false');
     effectsButton.innerHTML =

@@ -1,11 +1,11 @@
 /***********************************************************************
  * 9. TOKEN PALETTE, DRAG-AND-DROP & 16-STEP BEAT SEQUENCER UI
  ***********************************************************************/
-function refreshAllUI() {
+function refreshAllUI(notifyChange = true) {
     syncStageToMeasure();
     audioEngine.syncPerformerEffects();
     renderTokenPalette();
-    renderTimelineTracks();
+    renderTimelineTracks(notifyChange);
     updatePedestalHUDBadges();
     updateStageHeaderUI();
     highlightSequencerStep(appState.currentStep);
@@ -195,8 +195,8 @@ function endTokenDrag() {
 let cachedStepColumns = Array.from({ length: 16 }, () => []);
 let lastHighlightedStep = -1;
 
-function renderTimelineTracks() {
-    songChanged();
+function renderTimelineTracks(notifyChange = true) {
+    if (notifyChange) songChanged();
     const wrapper = document.getElementById('timeline-tracks-wrapper');
     if (!wrapper) return;
     wrapper.innerHTML = '';

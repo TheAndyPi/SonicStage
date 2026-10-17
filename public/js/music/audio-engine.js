@@ -7,6 +7,7 @@ class StudioAudioEngine {
         this.mixBus = null;
         this.mixHeadroom = 1;
         this.masterGain = null;
+        this.masterEffectRack = null;
         this.compressor = null;
         this.limiter = null;
         this.analyser = null;
@@ -186,7 +187,7 @@ class StudioAudioEngine {
 
         this.activeBus = this.mixBus;
 
-        // Connect Master Chain: Mix Bus -> Compressor -> Drive -> 3-Band EQ -> DJ Filter -> MasterGain
+        // Connect Master Chain: Mix Bus -> Compressor -> Drive -> 3-Band EQ -> DJ Filter -> Master Inserts -> MasterGain
         // -> Limiter -> Safety Clipper -> Analyser -> Destination
         this.reverbSend.connect(this.reverbNode);
         this.reverbNode.connect(this.compressor);
@@ -222,6 +223,7 @@ class StudioAudioEngine {
             safetyClipper.connect(this.mediaDest);
         }
 
+        this.setMasterEffects(appState.masterEffects);
         this.noiseBuffer = this.createNoiseBuffer();
         this.nextNoteTime = this.ctx.currentTime + 0.05;
         this.startScheduler();
@@ -259,19 +261,39 @@ class StudioAudioEngine {
     // Rebuild only when the ordered active inserts change. Amount edits reuse nodes.
     setSlotEffects(slotIndex, effects, time = this.ctx?.currentTime || 0, audible = true) {
         if (!this.ctx || !this.slotGains[slotIndex]) return;
+        this.slotEffectRacks[slotIndex] = this.routeEffectRack(
+            this.slotGains[slotIndex],
+            this.slotPanners[slotIndex],
+            this.slotEffectRacks[slotIndex],
+            effects,
+            time,
+            audible,
+        );
+    }
+
+    // All dry players and shared effect returns pass through these inserts before output protection.
+    setMasterEffects(effects, time = this.ctx?.currentTime || 0) {
+        if (!this.ctx || !this.djFilterNode || !this.masterGain) return;
+        this.masterEffectRack = this.routeEffectRack(
+            this.djFilterNode,
+            this.masterGain,
+            this.masterEffectRack,
+            effects,
+            time,
+        );
+    }
+
+    routeEffectRack(input, output, previous, effects, time, audible = true) {
         const active = normalizePerformerEffects(effects).filter(effect => effect.enabled);
         const key = active.map(effect => effect.id).join('|');
-        let previous = this.slotEffectRacks[slotIndex];
-        if (!previous && !active.length) return;
+        if (!previous && !active.length) return null;
         if (previous?.key === key) {
             previous.rack.update(active, time);
             previous.rack.output.gain.setTargetAtTime(audible ? 1 : 0, time, 0.012);
-            return;
+            return previous;
         }
         const rack = new PerformerEffectRack(this, active, time);
         rack.output.gain.value = 0;
-        const input = this.slotGains[slotIndex];
-        const output = this.slotPanners[slotIndex];
         if (!previous) {
             const dryRack = new PerformerEffectRack(this, [], time);
             input.connect(dryRack.input);
@@ -283,14 +305,11 @@ class StudioAudioEngine {
         rack.output.connect(output);
         rack.output.gain.setTargetAtTime(audible ? 1 : 0, time, 0.012);
         previous.rack.output.gain.setTargetAtTime(0, time, 0.012);
-        this.slotEffectRacks[slotIndex] = { key, rack };
-        if (previous)
-            setTimeout(
-                () => {
-                    this.retirePerformerRack(input, previous.rack, time + 0.1);
-                },
-                Math.max(0, time - this.ctx.currentTime) * 1000 + 120,
-            );
+        setTimeout(
+            () => this.retirePerformerRack(input, previous.rack, time + 0.1),
+            Math.max(0, time - this.ctx.currentTime) * 1000 + 120,
+        );
+        return { key, rack };
     }
 
     retirePerformerRack(input, rack, afterTime) {
@@ -340,6 +359,7 @@ class StudioAudioEngine {
     }
 
     updateDelaySync() {
+        this.setMasterEffects(appState.masterEffects);
         if (!this.ctx || !this.delayNodeL || !this.delayNodeR) return;
         const clampedBpm = Math.max(40, Math.min(240, appState.bpm));
         const dotted8th = (60 / clampedBpm) * 0.75;

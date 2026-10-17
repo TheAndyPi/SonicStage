@@ -508,6 +508,22 @@ function handleStudioShortcut(event) {
     if (!event.repeat) action();
 }
 
+function bindStageMenu() {
+    const stageMenu = document.querySelector('.stage-menu');
+    stageMenu.addEventListener('focusout', event => {
+        // Touch browsers can blur the summary without focusing the tapped button.
+        // Let its click run; outside presses and keyboard focus still dismiss the menu.
+        if (event.relatedTarget && !stageMenu.contains(event.relatedTarget)) stageMenu.open = false;
+    });
+    stageMenu.addEventListener('click', event => {
+        if (event.target.closest('button')) stageMenu.open = false;
+    });
+    document.addEventListener('pointerdown', event => {
+        document.body.classList.remove('transport-shortcut');
+        if (stageMenu.open && !stageMenu.contains(event.target)) stageMenu.open = false;
+    });
+}
+
 function initStudio() {
     const tray = studioById('selector-tray-panel');
     const palette = studioById('token-palette');
@@ -831,17 +847,7 @@ function initStudio() {
             document.querySelectorAll('details[open]').forEach(d => (d.open = false));
         }
     });
-    const stageMenu = document.querySelector('.stage-menu');
-    stageMenu.addEventListener('focusout', event => {
-        if (!stageMenu.contains(event.relatedTarget)) stageMenu.open = false;
-    });
-    stageMenu.addEventListener('click', event => {
-        if (event.target.closest('button')) stageMenu.open = false;
-    });
-    document.addEventListener('pointerdown', event => {
-        document.body.classList.remove('transport-shortcut');
-        if (stageMenu.open && !stageMenu.contains(event.target)) stageMenu.open = false;
-    });
+    bindStageMenu();
     document.addEventListener('keydown', handleStudioShortcut, true);
     studioById('recent-list').addEventListener('click', event => {
         const button = event.target.closest('[data-recent-id]');

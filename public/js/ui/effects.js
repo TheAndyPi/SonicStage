@@ -1,4 +1,4 @@
-/* The library is shared by both studio views; inserts belong to a player in a bar. */
+/* The library is shared by both studio views; inserts target a player, bar, or master output. */
 let effectsPreviousLibraryHeight = null;
 
 function setStudioLibraryTab(tab) {
@@ -43,6 +43,46 @@ function openPerformerEffects(index) {
     studioById('fx-performer')?.focus({ preventScroll: true });
 }
 
+function openMasterEffects() {
+    appState.effectsScope = 'master';
+    if (appState.proFxOpen) studioById('btn-close-fx').click();
+    setStudioPanel('effects', true);
+    studioById('fx-performer')?.focus({ preventScroll: true });
+}
+
+function commitMasterEffects(effects, rebuild = true) {
+    appState.masterEffects = normalizePerformerEffects(effects);
+    audioEngine.setMasterEffects(appState.masterEffects);
+    songChanged();
+    if (rebuild && appState.libraryTab === 'effects') renderEffectsLibrary();
+    return true;
+}
+
+function applyMasterEffect(effectId) {
+    const definition = PERFORMER_EFFECT_BY_ID.get(effectId);
+    if (!definition) return false;
+    const effects = normalizePerformerEffects(appState.masterEffects);
+    if (effects.some(effect => effect.id === effectId)) {
+        showStageToast(`${definition.name} is already in the master rack.`, definition.color);
+        return false;
+    }
+    if (effects.length >= MAX_PERFORMER_EFFECTS) {
+        showStageToast('Four effects on the master · remove one to make room.', definition.color);
+        return false;
+    }
+    checkpointSong();
+    audioEngine.init();
+    appState.effectsScope = 'master';
+    effects.push({ id: effectId, amount: 0.5, enabled: true });
+    commitMasterEffects(effects);
+    showStageToast(`${definition.name} → Master track`, definition.color);
+    return true;
+}
+
+function applyLibraryEffect(effectId) {
+    return appState.effectsScope === 'master' ? applyMasterEffect(effectId) : applyPerformerEffect(effectId);
+}
+
 function commitPerformerEffects(index, effects, rebuild = true) {
     const slot = appState.slots[index];
     if (!slot?.preset) return false;
@@ -81,6 +121,7 @@ function applyPerformerEffect(effectId, index = appState.effectsSlotIndex) {
     }
     checkpointSong();
     audioEngine.init();
+    appState.effectsScope = 'player';
     appState.effectsSlotIndex = index;
     effects.push({ id: effectId, amount: 0.5, enabled: true });
     commitPerformerEffects(index, effects);
@@ -108,34 +149,43 @@ function renderEffectsLibrary() {
         appState.effectsSlotIndex = players[0]?.index ?? -1;
     const slot = appState.slots[appState.effectsSlotIndex];
     const arrange = songState.view === 'song';
+    const masterScope = appState.effectsScope === 'master';
     const barScope = arrange && appState.effectsScope === 'bar';
     const rackSlots = effectsRackSlots();
-    const effects = barScope ? arrangementEffectEntries(rackSlots) : normalizePerformerEffects(slot?.effects);
+    const effects = masterScope
+        ? normalizePerformerEffects(appState.masterEffects)
+        : barScope
+          ? arrangementEffectEntries(rackSlots)
+          : normalizePerformerEffects(slot?.effects);
     const insertCount = rackSlots.reduce((sum, player) => sum + (player.effects?.length || 0), 0);
-    studioById('selector-tray-panel').querySelector('.library-footer').textContent = arrange
-        ? 'DRAG TO A CLIP · DROP ON A HEADING FOR THE WHOLE BAR'
-        : 'CLICK TO APPLY · DRAG TO A PLAYER';
-    palette.innerHTML = `<section class="fx-rack" aria-label="Performer effect rack">
-        ${arrange ? `<div class="fx-bar-context"><button type="button" id="fx-bar-prev" aria-label="Effects in previous bar" ${songState.selected === 0 ? 'disabled' : ''}>‹</button><strong>BAR ${String(songState.selected + 1).padStart(2, '0')} <span>/ ${songState.measures.length}</span></strong><button type="button" id="fx-bar-next" aria-label="Effects in next bar" ${songState.selected === songState.measures.length - 1 ? 'disabled' : ''}>›</button></div>` : ''}
-        <div class="fx-rack-heading"><span>${barScope ? 'BAR INSERTS' : 'PLAYER INSERTS'}</span><span>${barScope ? `${insertCount} across ${players.length} players` : `${effects.length} / ${MAX_PERFORMER_EFFECTS}`}</span></div>
+    studioById('selector-tray-panel').querySelector('.library-footer').textContent = masterScope
+        ? 'CLICK TO APPLY TO THE MASTER TRACK'
+        : arrange
+          ? 'DRAG TO A CLIP · DROP ON A HEADING FOR THE WHOLE BAR'
+          : 'CLICK TO APPLY · DRAG TO A PLAYER';
+    palette.innerHTML = `<section class="fx-rack" aria-label="${masterScope ? 'Master' : 'Performer'} effect rack">
+        ${arrange && !masterScope ? `<div class="fx-bar-context"><button type="button" id="fx-bar-prev" aria-label="Effects in previous bar" ${songState.selected === 0 ? 'disabled' : ''}>‹</button><strong>BAR ${String(songState.selected + 1).padStart(2, '0')} <span>/ ${songState.measures.length}</span></strong><button type="button" id="fx-bar-next" aria-label="Effects in next bar" ${songState.selected === songState.measures.length - 1 ? 'disabled' : ''}>›</button></div>` : ''}
+        <div class="fx-rack-heading"><span>${masterScope ? 'MASTER INSERTS' : barScope ? 'BAR INSERTS' : 'PLAYER INSERTS'}</span><span>${barScope ? `${insertCount} across ${players.length} players` : `${effects.length} / ${MAX_PERFORMER_EFFECTS}`}</span></div>
         <label class="fx-target-label" for="fx-performer">Apply effects to</label>
-        <select id="fx-performer" ${players.length ? '' : 'disabled'}></select>
+        <select id="fx-performer"></select>
         <div class="fx-chain"></div>
-        ${arrange ? `<div class="fx-arrange-actions"><button type="button" id="fx-clear-chain" ${!insertCount ? 'disabled' : ''}>Clear ${barScope ? 'bar effects' : 'chain'}</button><span>Copy ${barScope ? 'player chains' : 'chain'} to</span><button type="button" id="fx-copy-next" title="Replace effects on matching player positions in the next bar; empty positions stay empty" ${songState.selected === songState.measures.length - 1 ? 'disabled' : ''}>Next bar</button><button type="button" id="fx-copy-all" title="Replace effects on matching player positions in all other bars; empty positions stay empty" ${songState.measures.length < 2 ? 'disabled' : ''}>All bars</button></div>` : ''}
-        <p class="fx-rack-hint">${!players.length ? 'Add a sound first. Every performer gets their own effects.' : arrange ? (barScope ? 'New effects go to every available player in this bar. Adjustments below affect players with that effect. Select a player to reorder its chain.' : 'Only this player in this bar. Drop on a bar heading to affect every player.') : 'Top to bottom = signal order. Drag a card onto any player.'}</p>
+        ${masterScope ? `<div class="fx-arrange-actions"><button type="button" id="fx-clear-chain" ${!effects.length ? 'disabled' : ''}>Clear master effects</button></div>` : ''}
+        ${arrange && !masterScope ? `<div class="fx-arrange-actions"><button type="button" id="fx-clear-chain" ${!insertCount ? 'disabled' : ''}>Clear ${barScope ? 'bar effects' : 'chain'}</button><span>Copy ${barScope ? 'player chains' : 'chain'} to</span><button type="button" id="fx-copy-next" title="Replace effects on matching player positions in the next bar; empty positions stay empty" ${songState.selected === songState.measures.length - 1 ? 'disabled' : ''}>Next bar</button><button type="button" id="fx-copy-all" title="Replace effects on matching player positions in all other bars; empty positions stay empty" ${songState.measures.length < 2 ? 'disabled' : ''}>All bars</button></div>` : ''}
+        <p class="fx-rack-hint">${masterScope ? 'Processes the whole song, including reverb and delay returns. Top to bottom = signal order, before master level and limiting.' : !players.length ? 'Add a sound first. Every performer gets their own effects.' : arrange ? (barScope ? 'New effects go to every available player in this bar. Adjustments below affect players with that effect. Select a player to reorder its chain.' : 'Only this player in this bar. Drop on a bar heading to affect every player.') : 'Top to bottom = signal order. Drag a card onto any player.'}</p>
         </section><section class="fx-browser" aria-label="Effect collection"><div class="fx-filters" role="group" aria-label="Effect category"></div><div class="fx-cards"></div></section>`;
     const select = studioById('fx-performer');
     if (arrange && players.length) select.add(new Option('All performers in this bar', 'bar'));
-    if (!players.length) select.add(new Option('No performers yet', '-1'));
+    select.add(new Option('Master track · whole song', 'master'));
+    if (!players.length && !masterScope) select.add(new Option('No performers yet', '-1'));
     players.forEach(player => select.add(new Option(`${player.index + 1} · ${player.preset.shortName}`, player.index)));
-    select.value = barScope && players.length ? 'bar' : appState.effectsSlotIndex;
+    select.value = masterScope ? 'master' : barScope && players.length ? 'bar' : appState.effectsSlotIndex;
     select.addEventListener('change', () => {
-        appState.effectsScope = select.value === 'bar' ? 'bar' : 'player';
-        if (select.value !== 'bar') appState.effectsSlotIndex = Number(select.value);
+        appState.effectsScope = ['bar', 'master'].includes(select.value) ? select.value : 'player';
+        if (appState.effectsScope === 'player') appState.effectsSlotIndex = Number(select.value);
         renderEffectsLibrary();
         studioById('fx-performer').focus();
     });
-    if (arrange) {
+    if (arrange && !masterScope) {
         studioById('fx-bar-prev').addEventListener('click', () => {
             selectSongMeasure(songState.selected - 1);
             const previous = studioById('fx-bar-prev');
@@ -146,14 +196,14 @@ function renderEffectsLibrary() {
             const next = studioById('fx-bar-next');
             (next?.disabled ? studioById('fx-performer') : next)?.focus({ preventScroll: true });
         });
-        studioById('fx-clear-chain').addEventListener('click', () => {
-            checkpointSong();
-            mutateEffectsRack(next => next.splice(0));
-            studioById('fx-performer').focus({ preventScroll: true });
-        });
         studioById('fx-copy-next').addEventListener('click', () => copyArrangementEffects('next'));
         studioById('fx-copy-all').addEventListener('click', () => copyArrangementEffects('all'));
     }
+    studioById('fx-clear-chain')?.addEventListener('click', () => {
+        checkpointSong();
+        mutateEffectsRack(next => next.splice(0));
+        studioById('fx-performer').focus({ preventScroll: true });
+    });
     const chain = palette.querySelector('.fx-chain');
     if (!effects.length)
         chain.innerHTML =
@@ -459,7 +509,7 @@ function bindEffectDrag(card, definition) {
     });
     card.addEventListener('click', event => {
         cancel();
-        if (!dragged || event.detail === 0) applyPerformerEffect(definition.id);
+        if (!dragged || event.detail === 0) applyLibraryEffect(definition.id);
     });
 }
 
@@ -472,6 +522,7 @@ function initPerformerEffectsUI() {
     heading
         .querySelectorAll('button')
         .forEach(button => button.addEventListener('click', () => setStudioLibraryTab(button.dataset.libraryTab)));
+    studioById('btn-master-effects').addEventListener('click', openMasterEffects);
     studioById('track-effects').addEventListener('click', () =>
         openPerformerEffects(Number(studioById('track-dialog').dataset.slotIndex)),
     );

@@ -65,6 +65,7 @@ function selectArrangementClip(measureIndex, slotIndex) {
 }
 
 function effectsRackSlots() {
+    if (appState.effectsScope === 'master') return [{ effects: appState.masterEffects }];
     return songState.view === 'song' && appState.effectsScope === 'bar'
         ? appState.slots.filter(slot => slot.preset)
         : [appState.slots[appState.effectsSlotIndex]].filter(slot => slot?.preset);
@@ -89,6 +90,12 @@ function arrangementEffectEntries(slots) {
 }
 
 function mutateEffectsRack(change, rebuild = true) {
+    if (appState.effectsScope === 'master') {
+        const effects = normalizePerformerEffects(appState.masterEffects);
+        change(effects);
+        commitMasterEffects(effects, rebuild);
+        return;
+    }
     const slots = effectsRackSlots();
     if (!slots.length) return;
     slots.forEach(slot => {
@@ -104,6 +111,7 @@ function mutateEffectsRack(change, rebuild = true) {
 }
 
 function copyArrangementEffects(destination) {
+    if (appState.effectsScope === 'master') return false;
     const source = effectsRackSlots();
     const indexes =
         destination === 'next'

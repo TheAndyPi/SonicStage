@@ -9,13 +9,20 @@ const context = vm.createContext({
     window: { matchMedia: () => ({ matches: false }) },
     document: {
         getElementById: id => {
-            if (!elements.has(id)) elements.set(id, { value: 'Effects test', setAttribute() {} });
+            if (!elements.has(id))
+                elements.set(id, { value: 'Effects test', setAttribute() {}, querySelectorAll: () => [] });
             return elements.get(id);
         },
         elementFromPoint: () => context.pointElement,
     },
     checkpointSong: () => calls.checkpoints++,
-    audioEngine: { init() {}, setSlotEffects: (...args) => calls.audio.push(args) },
+    audioEngine: {
+        init() {},
+        setSlotEffects: (...args) => calls.audio.push(args),
+        setMasterEffects: effects => {
+            calls.master = structuredClone(effects);
+        },
+    },
     showStageToast: message => (calls.toast = message),
     renderTimelineTracks() {},
     updatePedestalHUDBadges() {},
@@ -151,4 +158,33 @@ assert.equal(run('effectDropTarget(10,10).kind'), 'empty');
 
 console.log(
     'Passed: arrangement clip/bar drops, atomic batches, full/empty racks, playback isolation, copy scope, independent persistence, duplicate players, badges, and drop targets.',
+);
+
+// Master changes apply globally even when an unrelated bar is playing, with no player mutation.
+run(`appState.effectsScope = 'master'; appState.slots = empty.slots;
+    songState.selected = 3; appState.libraryTab = 'effects';
+    var playersBeforeMaster = JSON.stringify(songState.measures);`);
+const beforeMaster = calls.checkpoints;
+assert.equal(run(`applyLibraryEffect('chorus')`), true, 'master works with no players in the edited bar');
+assert.equal(calls.checkpoints, beforeMaster + 1);
+assert.equal(calls.master[0].id, 'chorus');
+assert.equal(run('JSON.stringify(songState.measures)'), run('playersBeforeMaster'));
+assert.ok(run('songState.playMeasure === a'), 'master edits preserve playback position');
+assert.equal(run(`applyLibraryEffect('chorus')`), false, 'no duplicate master inserts');
+assert.equal(run(`applyLibraryEffect('unknown')`), false);
+assert.equal(calls.checkpoints, beforeMaster + 1, 'rejected master edits do not add undo entries');
+for (const id of ['air', 'echo', 'room']) assert.equal(run(`applyLibraryEffect('${id}')`), true);
+assert.equal(run(`applyLibraryEffect('fuzz')`), false, 'master capacity is enforced');
+run(`mutateEffectsRack(effects => { effects[0].amount = .8; effects[0].enabled = false; }, false);`);
+assert.equal(calls.master[0].amount, 0.8);
+assert.equal(calls.master[0].enabled, false);
+run(`mutateEffectsRack(effects => { [effects[0],effects[1]] = [effects[1],effects[0]]; });`);
+assert.equal(calls.master[0].id, 'air');
+assert.equal(run(`readSongDocument(songDocument()).masterEffects[1].enabled`), false);
+assert.equal(run(`copyArrangementEffects('all')`), false, 'master inserts cannot be copied into bars');
+run('mutateEffectsRack(effects => effects.splice(0));');
+assert.equal(calls.master.length, 0);
+assert.equal(run('JSON.stringify(songState.measures)'), run('playersBeforeMaster'));
+console.log(
+    'Passed: master applications, empty bars, live playback, validation, capacity, amount, bypass, reorder, clear, and persistence.',
 );

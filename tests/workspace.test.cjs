@@ -198,6 +198,39 @@ workspace.cinematicState.active = true;
 key(' ');
 assert.equal(actions.pop(), 'cinema');
 assert.equal(actions.length, 0);
+const menuListeners = new Map();
+const documentListeners = new Map();
+const menuButton = { closest: selector => (selector === 'button' ? menuButton : null) };
+const summary = { closest: () => null };
+const outside = {};
+const stageMenu = {
+    open: true,
+    contains: target => target === menuButton || target === summary,
+    addEventListener: (name, listener) => menuListeners.set(name, listener),
+};
+const menuContext = vm.createContext({
+    document: {
+        querySelector: () => stageMenu,
+        body: { classList: { remove: () => {} } },
+        addEventListener: (name, listener) => documentListeners.set(name, listener),
+    },
+});
+vm.runInContext(productionFunction('bindStageMenu'), menuContext);
+menuContext.bindStageMenu();
+documentListeners.get('pointerdown')({ target: menuButton });
+menuListeners.get('focusout')({ relatedTarget: null });
+assert.ok(stageMenu.open, 'a touch blur must leave the action mounted until its click');
+menuListeners.get('click')({ target: menuButton });
+assert.ok(!stageMenu.open, 'the menu dismisses after the action click');
+stageMenu.open = true;
+menuListeners.get('click')({ target: summary });
+menuListeners.get('focusout')({ relatedTarget: menuButton });
+assert.ok(stageMenu.open, 'moving focus within the menu keeps it open');
+menuListeners.get('focusout')({ relatedTarget: outside });
+assert.ok(!stageMenu.open, 'tabbing outside still dismisses the menu');
+stageMenu.open = true;
+documentListeners.get('pointerdown')({ target: outside });
+assert.ok(!stageMenu.open, 'tapping outside still dismisses the menu');
 console.log(
-    'Passed: 150 camera layout changes, projection placement, clipping limits, zero-size recovery, buffer reuse, and global shortcuts with focused controls.',
+    'Passed: 150 camera layout changes, projection placement, clipping limits, zero-size recovery, buffer reuse, global shortcuts with focused controls, and touch menu dismissal.',
 );
