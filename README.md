@@ -4,16 +4,17 @@ SonicStage is a music studio that runs entirely in the browser. You pick sounds 
 
 Everything happens on the client. Sound is synthesized with the Web Audio API, the stage is rendered with Three.js, and the song generator composes locally, so there is no backend and no API key.
 
-This project was mostly for fun, and I wanted to give Cursor and Opus 5.5 and Gemini 4 Argon a try, so this is what I came up with.
+This project was built for fun to test out Cursor alongside Opus 5.5 and Gemini 4 Argon.
 
 ## Features
 
 - **Two views of one song.** _Immersive_ is a full-screen stage with a sound browser and compact transport. _Pro_ adds the arrangement sheet, harmony controls, recording, and the effects rack. Switching views keeps your work.
 - **100 instruments** across drums, bass, chords, melody, strings and horns, and vocals, all synthesized in real time.
 - **16-step beat editor** with per-track mute, solo, gain, pan, octave, shuffle, and reset.
-- **Song arrangement** of up to 1,024 independent bars, with copy, reorder, and labels.
-- **Song generator** that writes editable 8-, 16-, or 32-bar songs in House, Lo-fi, Funk, or Cinematic style.
-- **Effects rack** with master EQ, filter, drive, reverb, delay, swing, compression, and master level.
+- **Song arrangement** of up to 1,024 independent bars, with copy, reorder, and labels. Drop an effect onto a clip to affect that player in that bar, or onto a bar heading to affect all its performers. Effect badges open the relevant rack; bar scope supports shared amount/bypass controls and clearing, with chain copying to the next bar or all other bars. Repeated instruments have separate player rows.
+- **Song generator** that writes editable 8- to 64-bar songs in 18 styles, from House, Drum & Bass, and Trap to Bossa Nova, a 3/4 folk waltz, and a 6/8 soul ballad. Each song has a real form (intro, verses, builds, choruses, a bridge, and an ending), voice-led chord progressions, and a repeating melodic hook.
+- **21 performer effects** in both views: bass boost, warmth, air, telephone, underwater, auto wah, overdrive, fuzz, bitcrush, echo, slapback, dub delay, room, hall, cavern, chorus, flanger, vibrato, tremolo, auto pan, and ring modulation. Stack up to four per player with amount, bypass, and signal-order controls. Click to apply to the selected player, or drag onto a performer or beat row. Stage halos, ripples, or sparks reflect the active effects. Effects save with each bar and follow players when moved.
+- **Master effects rack** with master EQ, filter, drive, reverb, delay, swing, compression, and master level.
 - **Recording** of the master output, downloaded in the browser's supported audio format.
 - **Save and open** songs as SonicStage JSON files. Sessions also autosave in the browser, with undo and redo for the current visit.
 - **Light and dark themes**, including the 3D stage. Motion follows the system's reduced-motion setting.
@@ -107,7 +108,7 @@ Styling comes from two layers: Tailwind utility classes in the markup (compiled 
 | ---------------------- | ----------------------------------------------------- |
 | `npm run dev`          | Serves `public/` at <http://127.0.0.1:4173>           |
 | `npm run build`        | Compiles Tailwind into `public/css/tailwind.css`      |
-| `npm test`             | Runs both test suites                                 |
+| `npm test`             | Runs all four test suites                             |
 | `npm run format`       | Formats HTML, CSS, JS, and config files with Prettier |
 | `npm run format:check` | Checks formatting without changing files              |
 
@@ -117,7 +118,9 @@ Run `npm run build` after adding or changing Tailwind classes, and commit the re
 
 The tests run in plain Node with no browser:
 
-- `tests/song-generator.test.cjs` generates 144 songs across every style, length, energy, and seed combination. It checks that seeds are deterministic, pitches stay in the scale, songs have distinct sections and dynamics, and that every generated song reopens through the real importer.
+- `tests/song-generator.test.cjs` generates 540 songs across every style, length, energy, and seed combination. It checks that seeds are deterministic, pitches stay in the scale, songs have distinct sections and dynamics, and that every generated song reopens through the real importer.
+- `tests/arrangement-effects.test.cjs` checks clip and whole-bar applications, batch undo checkpoints, full and empty racks, playback isolation, scoped copying, duplicate players, badge markup, drop targets, and persistence.
+- `tests/effects.test.cjs` checks all 21 effect graphs, isolated routing, bypass, node cleanup, song persistence, legacy imports, copied bars, and stage visuals.
 - `tests/workspace.test.cjs` runs the real camera-framing code through 150 layout changes (desktop, portrait, landscape, and ultrawide) to check projection, clipping, and drawing-buffer reuse. It also checks keyboard shortcut routing across focused buttons, sliders, text fields, and dialogs.
 
 ## Deploying to Vercel
@@ -145,3 +148,5 @@ The deployment also:
 - [Three.js](https://threejs.org/) r128 and its OrbitControls (MIT). License headers are kept in `public/vendor/`.
 - [Tailwind CSS](https://tailwindcss.com/) for utility classes.
 - Fonts: [DM Sans](https://fonts.google.com/specimen/DM+Sans), [Manrope](https://fonts.google.com/specimen/Manrope), and [IBM Plex Mono](https://fonts.google.com/specimen/IBM+Plex+Mono), loaded from Google Fonts.
+
+The effects suite also checks player moves, stage compaction, and fast drag handling. To verify actual Web Audio output, copy `tests/effects-audio.html` to `public/__effects-audio-test.html`, start the dev server, and open that page. It renders every effect at zero and 80% amount plus five four-effect chains in `OfflineAudioContext`; remove the copied page afterward.

@@ -296,6 +296,7 @@ function newStudioSong() {
         id: newProjectId(),
         title: 'Untitled song',
         bpm: 112,
+        timeSignature: '4/4',
         rootKey: 0,
         scaleMode: 'dorian',
         globalSwing: 0.04,
@@ -462,6 +463,8 @@ function bindStudioResize(handle, kind) {
 }
 
 function handleStudioShortcut(event) {
+    const isSpace = event.code === 'Space' || event.key === ' ';
+    if (!isSpace) document.body.classList.remove('transport-shortcut');
     if (
         event.defaultPrevented ||
         event.isComposing ||
@@ -484,11 +487,14 @@ function handleStudioShortcut(event) {
         if (key === 's') action = () => studioById('song-export').click();
         else if (key === 'z' && !editable && !cinematicState.active) action = event.shiftKey ? redoStudio : undoStudio;
     } else if (!editable) {
-        if (event.code === 'Space' || event.key === ' ')
+        if (isSpace)
             action = cinematicState.active ? toggleCinematicPause : () => studioById('btn-play-toggle').click();
         else if (!cinematicState.active) {
             if (event.key === 'Enter') action = () => playSongFrom(0);
             else if (event.key === '0') action = stopSong;
+            else if (event.key === '[') action = () => goToSongMeasure(transportMeasureIndex() - 1);
+            else if (event.key === ']') action = () => goToSongMeasure(transportMeasureIndex() + 1);
+            else if (key === 'l') action = toggleMeasureLoop;
             else if (event.key === '?') action = showHelp;
         }
     }
@@ -496,6 +502,9 @@ function handleStudioShortcut(event) {
     // Capture before a focused button, select, or beat step can consume the same key.
     event.preventDefault();
     event.stopImmediatePropagation();
+    // Space controls transport without turning the last clicked control's focus ring on.
+    // Keep focus in place so Tab and arrow navigation can resume normally.
+    if (isSpace && !command) document.body.classList.add('transport-shortcut');
     if (!event.repeat) action();
 }
 
@@ -616,6 +625,25 @@ function initStudio() {
         studioById('track-dialog').close();
         studioById('sound-search').focus();
     });
+    studioById('generator-styles').replaceChildren(
+        ...[{ id: 'random', name: 'Surprise me', blurb: 'Any style, new every time' }, ...SONG_STYLES].map(
+            (style, index) => {
+                const label = document.createElement('label');
+                const input = Object.assign(document.createElement('input'), {
+                    type: 'radio',
+                    name: 'style',
+                    value: style.id,
+                    checked: index === 0,
+                });
+                const text = document.createElement('span');
+                const blurb = document.createElement('small');
+                blurb.textContent = style.blurb;
+                text.append(style.name, blurb);
+                label.append(input, text);
+                return label;
+            },
+        ),
+    );
     studioById('generator-form').addEventListener('submit', async event => {
         event.preventDefault();
         const button = studioById('generator-submit');
@@ -623,19 +651,13 @@ function initStudio() {
         button.textContent = 'Composing…';
         await new Promise(requestAnimationFrame);
         try {
-            const style = new FormData(event.target).get('style');
             rememberRecentSong();
             const data = generateSong({
-                style,
+                style: new FormData(event.target).get('style'),
                 bars: Number(studioById('generator-bars').value),
                 energy: studioById('generator-energy').value,
             });
-            data.title = {
-                house: 'After hours',
-                lofi: 'Slow mornings',
-                funk: 'In the pocket',
-                cinematic: 'First light',
-            }[style];
+            const styleName = SONG_STYLES.find(style => style.id === data.style)?.name || 'Song';
             data.id = newProjectId();
             const valid = readSongDocument(data);
             checkpointSong();
@@ -648,13 +670,13 @@ function initStudio() {
             enterStudio();
             setSongView(studioExperience === 'pro' ? 'song' : 'stage');
             saveSongLocally();
-            showStageToast(`${data.measures.length} bars ready · ${data.bpm} BPM`, '#b9c695');
+            showStageToast(`${data.title} · ${styleName} · ${data.bpm} BPM`, '#b9c695');
         } catch (error) {
             studioById('generator-error').textContent = error.message || 'Could not generate this song.';
             studioById('generator-error').hidden = false;
         } finally {
             button.disabled = false;
-            button.textContent = '✳ Generate song';
+            button.textContent = 'Generate song';
         }
     });
     // One history entry per command or fader gesture, including keyboard edits.
@@ -665,7 +687,8 @@ function initStudio() {
             const step = focused?.matches('.timeline-cell')
                 ? { slot: focused.closest('[data-slot-index]').dataset.slotIndex, step: focused.dataset.step }
                 : null;
-            const sound = focused?.closest('.studio-token')?.getAttribute('aria-label');
+            const sound = focused?.closest('.studio-token')?.dataset.presetId;
+            const soundAction = focused?.dataset.soundAction;
             studioCommandDepth++;
             try {
                 return fn.apply(this, args);
@@ -676,14 +699,19 @@ function initStudio() {
                         .querySelector(`[data-slot-index="${step.slot}"] [data-step="${step.step}"]`)
                         ?.focus({ preventScroll: true });
                 if (sound && !document.contains(focused)) {
-                    const name = sound.replace(/^(Add|Remove) /, '');
-                    [...document.querySelectorAll('.studio-token')]
-                        .find(el => el.getAttribute('aria-label')?.endsWith(' ' + name))
-                        ?.focus({ preventScroll: true });
+                    const card = [...document.querySelectorAll('.studio-token')].find(
+                        el => el.dataset.presetId === sound,
+                    );
+                    (
+                        card?.querySelector(`[data-sound-action="${soundAction}"]`) ||
+                        card?.querySelector('[data-sound-action="add"]') ||
+                        card?.querySelector('.sound-main')
+                    )?.focus({ preventScroll: true });
                 }
             }
         };
     assignPresetToSlot = wrap(assignPresetToSlot);
+    removePresetPlayer = wrap(removePresetPlayer);
     handleStepCellClick = wrap(handleStepCellClick);
     randomizeSlotPattern = wrap(randomizeSlotPattern);
     resetSlotPattern = wrap(resetSlotPattern);
@@ -700,7 +728,7 @@ function initStudio() {
         event => {
             if (
                 event.target.matches(
-                    'input[type=range],#project-title,#song-measure-label,#bpm-number-input,#key-select,#scale-select',
+                    'input[type=range],#project-title,#song-measure-label,#bpm-number-input,#meter-select,#key-select,#scale-select',
                 ) ||
                 event.target.closest('#song-delete,#song-move-left,#song-move-right,#song-loop')
             )
@@ -713,7 +741,7 @@ function initStudio() {
         event => {
             if (
                 event.target.matches(
-                    'input[type=range],#project-title,#song-measure-label,#bpm-number-input,#key-select,#scale-select',
+                    'input[type=range],#project-title,#song-measure-label,#bpm-number-input,#meter-select,#key-select,#scale-select',
                 ) &&
                 !event.metaKey &&
                 !event.ctrlKey &&
@@ -744,12 +772,13 @@ function initStudio() {
         const rows = [...document.querySelectorAll('.timeline-track-row')];
         let row = rows.indexOf(cell.closest('.timeline-track-row')),
             step = Number(cell.dataset.step);
-        if (event.key === 'ArrowRight') step = Math.min(15, step + 1);
+        const lastStep = getStepsPerBar() - 1;
+        if (event.key === 'ArrowRight') step = Math.min(lastStep, step + 1);
         if (event.key === 'ArrowLeft') step = Math.max(0, step - 1);
         if (event.key === 'ArrowDown') row = Math.min(rows.length - 1, row + 1);
         if (event.key === 'ArrowUp') row = Math.max(0, row - 1);
         if (event.key === 'Home') step = 0;
-        if (event.key === 'End') step = 15;
+        if (event.key === 'End') step = lastStep;
         rows[row]?.querySelector(`[data-step="${step}"]`)?.focus();
     });
     studioById('btn-pro-fx').addEventListener('click', () => {
@@ -801,6 +830,17 @@ function initStudio() {
             }
             document.querySelectorAll('details[open]').forEach(d => (d.open = false));
         }
+    });
+    const stageMenu = document.querySelector('.stage-menu');
+    stageMenu.addEventListener('focusout', event => {
+        if (!stageMenu.contains(event.relatedTarget)) stageMenu.open = false;
+    });
+    stageMenu.addEventListener('click', event => {
+        if (event.target.closest('button')) stageMenu.open = false;
+    });
+    document.addEventListener('pointerdown', event => {
+        document.body.classList.remove('transport-shortcut');
+        if (stageMenu.open && !stageMenu.contains(event.target)) stageMenu.open = false;
     });
     document.addEventListener('keydown', handleStudioShortcut, true);
     studioById('recent-list').addEventListener('click', event => {

@@ -26,8 +26,10 @@ const _tempDummy = new THREE.Object3D();
 const _tempColor = new THREE.Color();
 const _tempVec3 = new THREE.Vector3();
 
+// World position of the gyroscope crystal: core group y (0.02) + crystal y (0.9).
+const STAGE_ORB_CENTER = new THREE.Vector3(0, 0.92, 0);
 const cameraTargetPos = new THREE.Vector3(0, 7.4, 12.8);
-const cameraLookAtTarget = new THREE.Vector3(0, 0.5, 0);
+const cameraLookAtTarget = STAGE_ORB_CENTER.clone();
 let isTransitioningCamera = false;
 const stageMotionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
 const compactStageDevice = window.matchMedia('(max-width: 760px), (pointer: coarse)').matches;
@@ -660,7 +662,6 @@ function initThreeStage() {
     scene.environment = createProceduralConcertEnvironment(renderer);
     initSharedMaterials();
 
-    // OrbitControls centered on (0, 0.5, 0)
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.07;
@@ -668,7 +669,7 @@ function initThreeStage() {
     controls.minPolarAngle = 0.18;
     controls.minDistance = 6.0;
     controls.maxDistance = 85.0;
-    controls.target.set(0, 0.5, 0);
+    controls.target.copy(STAGE_ORB_CENTER);
     controls.addEventListener('start', () => {
         isTransitioningCamera = false;
     });
@@ -1059,6 +1060,7 @@ function updatePedestalInstancedLEDPositions(idx, pedY) {
 function updateAllInstancedLEDColors() {
     if (!stepLedsInstancedMesh) return;
     const curStep = stageState.step;
+    const stepsPerBar = getStepsPerBar();
     for (let idx = 0; idx < pedestalMeshes.length; idx++) {
         const slot = stageState.slots[idx];
         const audible = idx < stageState.unlockedSlots && slot.preset && isSlotAudible(slot, stageState.slots);
@@ -1067,7 +1069,7 @@ function updateAllInstancedLEDColors() {
 
         for (let s = 0; s < 16; s++) {
             const instanceIdx = idx * 16 + s;
-            if (!audible) {
+            if (!audible || s >= stepsPerBar) {
                 _tempColor.setHex(0x161f33);
             } else if (s === curStep) {
                 _tempColor.setHex(0xffffff);

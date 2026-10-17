@@ -58,8 +58,12 @@ function paintStudioPanel(kind, open) {
     document.body.classList.toggle(sounds ? 'sounds-collapsed' : 'beats-collapsed', !open);
     panel.inert = !open || !studioStarted;
     panel.setAttribute('aria-hidden', !open);
-    trigger?.setAttribute('aria-expanded', open);
-    trigger?.setAttribute('aria-pressed', open);
+    trigger?.setAttribute('aria-expanded', open && (!sounds || appState.libraryTab === 'sounds'));
+    if (sounds) {
+        studioById('btn-effects')?.setAttribute('aria-expanded', open && appState.libraryTab === 'effects');
+        studioById('btn-effects')?.setAttribute('aria-pressed', open && appState.libraryTab === 'effects');
+    }
+    trigger?.setAttribute('aria-pressed', open && (!sounds || appState.libraryTab === 'sounds'));
     studioById(sounds ? 'btn-toggle-palette' : 'btn-toggle-timeline').textContent = sounds
         ? open
             ? 'Hide'
@@ -97,6 +101,10 @@ function syncStudioResizeHandle() {
     handle.setAttribute('aria-valuenow', Math.round(horizontal ? panel.height : panel.width));
 }
 function setStudioPanel(kind, open) {
+    if (kind === 'effects') {
+        setStudioLibraryTab('effects');
+        kind = 'sounds';
+    }
     if (kind !== 'sounds' && kind !== 'beats') return;
     if (studioExperience === 'immersive' && open) {
         const other = kind === 'sounds' ? 'beats' : 'sounds';
@@ -125,6 +133,7 @@ function setStudioExperience(mode, persist = true) {
         } catch (_) {}
         setStudioLibrarySize(width);
     }
+    if (next === 'immersive' && appState.libraryTab === 'effects') setStudioLibrarySize(290);
     paintStudioPanel('sounds', studioPanels[next].sounds);
     paintStudioPanel('beats', studioPanels[next].beats);
     setSongView(next === 'immersive' ? 'stage' : proSongView);
@@ -172,9 +181,26 @@ function initPlayfulStudio() {
     const switches = document.createElement('div');
     switches.className = 'panel-switches';
     switches.innerHTML =
-        '<button id="btn-sounds" type="button" aria-controls="selector-tray-panel" aria-expanded="true"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8v4m5-8v12m5-10v8m4-5v2" stroke-linecap="round"/></svg>Sounds</button><button id="btn-beats" type="button" aria-controls="bottom-dock" aria-expanded="false"><svg viewBox="0 0 20 20" fill="currentColor"><rect x="2" y="3" width="4" height="4" rx="1"/><rect x="8" y="3" width="4" height="4" rx="1"/><rect x="14" y="3" width="4" height="4" rx="1"/><rect x="2" y="11" width="4" height="4" rx="1"/><rect x="8" y="11" width="4" height="4" rx="1"/><rect x="14" y="11" width="4" height="4" rx="1"/></svg>Beats</button>';
+        '<button id="btn-sounds" type="button" title="Sounds" aria-controls="selector-tray-panel" aria-expanded="true"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8v4m5-8v12m5-10v8m4-5v2" stroke-linecap="round"/></svg>Sounds</button><button id="btn-beats" type="button" title="Beats" aria-controls="bottom-dock" aria-expanded="false"><svg viewBox="0 0 20 20" fill="currentColor"><rect x="2" y="3" width="4" height="4" rx="1"/><rect x="8" y="3" width="4" height="4" rx="1"/><rect x="14" y="3" width="4" height="4" rx="1"/><rect x="2" y="11" width="4" height="4" rx="1"/><rect x="8" y="11" width="4" height="4" rx="1"/><rect x="14" y="11" width="4" height="4" rx="1"/></svg>Beats</button>';
     document.querySelector('.control-bar').insertBefore(switches, document.querySelector('.workspace-switch'));
-    studioById('btn-sounds').addEventListener('click', () => setStudioPanel('sounds', appState.paletteCollapsed));
+    studioById('btn-sounds').addEventListener('click', () => {
+        const open = appState.paletteCollapsed || appState.libraryTab !== 'sounds';
+        setStudioLibraryTab('sounds');
+        setStudioPanel('sounds', open);
+    });
+    const effectsButton = document.createElement('button');
+    effectsButton.id = 'btn-effects';
+    effectsButton.type = 'button';
+    effectsButton.title = 'Performer effects';
+    effectsButton.setAttribute('aria-controls', 'selector-tray-panel');
+    effectsButton.setAttribute('aria-expanded', 'false');
+    effectsButton.innerHTML =
+        '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 10c3-12 4 12 8 0s5 12 8 0" stroke-linecap="round"/></svg>Effects';
+    switches.insertBefore(effectsButton, studioById('btn-beats'));
+    effectsButton.addEventListener('click', () =>
+        setStudioPanel('effects', appState.paletteCollapsed || appState.libraryTab !== 'effects'),
+    );
+    initPerformerEffectsUI();
     studioById('btn-beats').addEventListener('click', () => setStudioPanel('beats', !appState.timelineVisible));
     const heading = document.createElement('section');
     heading.id = 'immersive-heading';

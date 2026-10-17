@@ -6,26 +6,13 @@ function assignPresetToSlot(presetId, targetSlotIdx = -1) {
     const preset = INSTRUMENT_PRESETS.find(p => p.id === presetId);
     if (!preset) return;
 
-    const existingSlotIdx = appState.slots.findIndex(s => s.preset && s.preset.id === presetId);
-    if (existingSlotIdx !== -1 && targetSlotIdx === -1) {
-        clearSlot(existingSlotIdx);
-        return;
-    }
-
-    if (existingSlotIdx !== -1 && targetSlotIdx !== -1 && existingSlotIdx !== targetSlotIdx) {
-        appState.slots[existingSlotIdx].preset = null;
-        appState.slots[existingSlotIdx].customSteps = null;
-        appState.slots[existingSlotIdx].customHeights = null;
-        rebuildPedestalPerformer(existingSlotIdx);
-    }
-
     let slotIdx = targetSlotIdx;
     if (slotIdx === -1) {
         slotIdx = appState.slots.findIndex(s => s.preset === null);
     }
     if (slotIdx === -1) {
-        slotIdx = appState.slots.findIndex(s => s.preset && s.preset.category === preset.category);
-        if (slotIdx === -1) slotIdx = 0;
+        showStageToast(`Stage is full · remove a player to add ${preset.shortName}`, '#f43f5e');
+        return;
     }
 
     const slot = appState.slots[slotIdx];
@@ -41,6 +28,12 @@ function assignPresetToSlot(presetId, targetSlotIdx = -1) {
 
     reconcileStageCapacity(false);
     refreshAllUI();
+}
+
+// Removes the most recently placed player of this sound.
+function removePresetPlayer(presetId) {
+    const slotIdx = appState.slots.findLastIndex(s => s.preset && s.preset.id === presetId);
+    if (slotIdx !== -1) clearSlot(slotIdx);
 }
 
 /**
@@ -172,7 +165,7 @@ window.randomizeSlotPattern = function (slotIndex) {
     const density = slot.preset.category === 'drums' ? 0.68 : slot.preset.category === 'chords' ? 0.38 : 0.52;
 
     for (let s = 0; s < 16; s++) {
-        const isDownbeat = s % 4 === 0;
+        const isDownbeat = s % getMeter().stepsPerBeat === 0;
         if ((isDownbeat && Math.random() < 0.82) || Math.random() < density) {
             const vIdx = isDownbeat ? 0 : Math.floor(Math.random() * variations.length);
             stepsArr[s] = cloneStepValue(variations[vIdx].val);
@@ -272,6 +265,7 @@ window.toggleSlotSolo = function (slotIndex) {
 };
 
 window.clearSlot = function (slotIndex) {
+    appState.slots[slotIndex].effects = [];
     appState.slots[slotIndex].preset = null;
     appState.slots[slotIndex].customSteps = null;
     appState.slots[slotIndex].customHeights = null;
@@ -296,6 +290,7 @@ window.moveStagePlayer = function (fromIdx, toIdx) {
         'customHeights',
         'volume',
         'pan',
+        'effects',
         'pitchShift',
         'muted',
         'solo',
@@ -313,6 +308,8 @@ window.moveStagePlayer = function (fromIdx, toIdx) {
             b[key] = held;
         });
     });
+    if (appState.effectsSlotIndex === fromIdx) appState.effectsSlotIndex = toIdx;
+    else if (appState.effectsSlotIndex === toIdx) appState.effectsSlotIndex = fromIdx;
     [fromIdx, toIdx].forEach(idx => {
         audioEngine.setSlotGain(idx, appState.slots[idx].volume);
         audioEngine.setSlotPan(idx, appState.slots[idx].pan);
@@ -332,6 +329,7 @@ window.removeStagePlayer = function (slotIdx) {
 
 function clearAllSlots() {
     for (let i = 0; i < MAX_SLOTS; i++) {
+        appState.slots[i].effects = [];
         appState.slots[i].preset = null;
         appState.slots[i].customSteps = null;
         appState.slots[i].customHeights = null;
@@ -352,6 +350,7 @@ function triggerAutoMix(countTarget = 5) {
     ensurePedestalsUpTo(clampedTarget);
 
     for (let i = 0; i < MAX_SLOTS; i++) {
+        appState.slots[i].effects = [];
         appState.slots[i].preset = null;
         appState.slots[i].customSteps = null;
         appState.slots[i].customHeights = null;

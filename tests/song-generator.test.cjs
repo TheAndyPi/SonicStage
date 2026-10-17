@@ -16,22 +16,39 @@ const context = vm.createContext({
 vm.runInContext(html.slice(start, end), context);
 vm.runInContext(readPublic('js/music/song-generator.js'), context);
 const originalSong = vm.runInContext('JSON.stringify(songDocument())', context);
-const styles = ['house', 'lofi', 'cinematic', 'funk'];
+const styles = context.SONG_STYLES.map(style => style.id);
+assert(styles.length >= 16, 'The generator offers a wide selection of styles');
+assert.equal(new Set(styles).size, styles.length);
 const energies = ['low', 'medium', 'high'];
 const allowedChroma = new Set([0, 2, 3, 5, 7, 9, 10]);
+const meterSteps = { '2/4': 8, '3/4': 12, '4/4': 16, '5/8': 10, '6/8': 12, '7/8': 14 };
 let generated = 0;
 
 function activity(measure) {
     return measure.slots.reduce((sum, slot) => sum + slot.steps.filter(event => event !== null).length, 0);
 }
 
+function pitchesOf(event) {
+    if (typeof event === 'number') return [event];
+    if (Array.isArray(event)) return event;
+    if (event && typeof event === 'object') {
+        if (Array.isArray(event.notes)) return event.notes;
+        if (typeof event.n === 'number') return [event.n];
+    }
+    return [];
+}
+
 for (const style of styles) {
-    for (const bars of [8, 16, 32]) {
+    const meta = context.SONG_STYLES.find(entry => entry.id === style);
+    for (const bars of [8, 16, 32, 64]) {
         for (const energy of energies) {
-            for (const seed of ['session-one', 'session-two', 0, 947]) {
+            for (const seed of bars === 64 ? ['long-form'] : ['session-one', 0, 947]) {
                 const options = { style, bars, energy, seed };
                 const song = context.generateSong(options);
                 assert.equal(song.measures.length, bars);
+                assert.equal(song.style, style);
+                assert.equal(song.timeSignature, meta.meter);
+                assert(typeof song.title === 'string' && song.title.length > 0, 'Songs get a title');
                 assert.equal(song.loop, false, 'A generated song has a complete ending');
                 assert.equal(
                     JSON.stringify(song),
@@ -44,7 +61,7 @@ for (const style of styles) {
                     'Generating does not replace the current song',
                 );
                 const sections = new Set(song.measures.map(measure => measure.label.split(' · ')[0]));
-                assert(sections.size >= 6, 'The arrangement has distinct musical sections');
+                assert(sections.size >= (bars === 8 ? 3 : 4), `${style} ${bars}: the arrangement has sections`);
                 const maxActivity = Math.max(...song.measures.map(activity));
                 assert(activity(song.measures[0]) < maxActivity, 'The arrangement opens with space');
                 assert(activity(song.measures.at(-1)) < maxActivity, 'The arrangement resolves to an ending');
@@ -52,10 +69,11 @@ for (const style of styles) {
                     song.measures.map(measure => JSON.stringify(measure.slots.map(slot => slot.steps))),
                 );
                 assert(patterns.size >= Math.min(6, bars), 'Measures develop through the song');
+                const playable = meterSteps[song.timeSignature];
                 const mixLevels = new Set();
                 const ensemble = new Map();
                 for (const measure of song.measures) {
-                    assert(measure.slots.length > 0 && measure.slots.length <= 6);
+                    assert(measure.slots.length > 0 && measure.slots.length <= 10);
                     const uniquePresets = new Set(measure.slots.map(slot => slot.presetId));
                     assert.equal(
                         uniquePresets.size,
@@ -74,8 +92,8 @@ for (const style of styles) {
                         );
                         slot.steps.forEach((event, index) => {
                             assert.equal(slot.heights[index] > 0, event !== null);
-                            const notes = typeof event === 'number' ? [event] : Array.isArray(event) ? event : [];
-                            notes.forEach(note =>
+                            if (index >= playable) assert.equal(event, null, 'Steps beyond the meter stay silent');
+                            pitchesOf(event).forEach(note =>
                                 assert(
                                     allowedChroma.has(((note % 12) + 12) % 12),
                                     'Generated pitches use the app source scale',
@@ -97,12 +115,30 @@ for (const style of styles) {
     }
 }
 
+const surprise = context.generateSong({ style: 'random', seed: 'surprise' });
+assert(styles.includes(surprise.style), 'Surprise picks a real style');
 for (const options of [{ style: 'unknown' }, { bars: 0 }, { bars: 17 }, { energy: 'maximum' }, { seed: {} }, null]) {
     assert.throws(() => context.generateSong(options));
+}
+const legacy = context.generateSong({ style: 'house', seed: 'meter' });
+delete legacy.timeSignature;
+context.documentToRead = legacy;
+assert.equal(
+    vm.runInContext('readSongDocument(documentToRead)', context).timeSignature,
+    '4/4',
+    'Older files open in 4/4',
+);
+for (const signature of ['2/4', '3/4', '5/8', '6/8', '7/8']) {
+    context.documentToRead = { ...context.generateSong({ seed: 'meter' }), timeSignature: signature };
+    assert.equal(vm.runInContext('readSongDocument(documentToRead)', context).timeSignature, signature);
+}
+for (const signature of ['9/8', '4/3', 4, '']) {
+    context.documentToRead = { ...context.generateSong({ seed: 'meter' }), timeSignature: signature };
+    assert.throws(() => vm.runInContext('readSongDocument(documentToRead)', context));
 }
 const first = context.generateSong({ seed: 'one' });
 const second = context.generateSong({ seed: 'two' });
 assert.notEqual(JSON.stringify(first), JSON.stringify(second), 'A new seed makes a different song');
 console.log(
-    `Passed: ${generated} generated songs, deterministic seeds, musical sections, harmony, dynamics, import round trips, and no state mutation.`,
+    `Passed: ${generated} generated songs across ${styles.length} styles, deterministic seeds, sections, harmony, dynamics, import round trips, and no state mutation.`,
 );

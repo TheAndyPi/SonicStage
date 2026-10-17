@@ -3,6 +3,7 @@
  ***********************************************************************/
 function refreshAllUI() {
     syncStageToMeasure();
+    audioEngine.syncPerformerEffects();
     renderTokenPalette();
     renderTimelineTracks();
     updatePedestalHUDBadges();
@@ -48,6 +49,7 @@ function setBeatBarSize(sizeKey, customPxHeight = null) {
 }
 
 function renderTokenPalette() {
+    if (appState.libraryTab === 'effects') return renderEffectsLibrary();
     const palette = document.getElementById('token-palette');
     if (!palette) return;
     palette.innerHTML = '';
@@ -62,45 +64,83 @@ function renderTokenPalette() {
 
     filtered.forEach(preset => {
         const meta = CATEGORY_META[preset.category];
-        const assignedSlots = appState.slots.filter(s => s.preset && s.preset.id === preset.id);
-        const isActive = assignedSlots.length > 0;
-        const badgeText = isActive
-            ? assignedSlots.length > 1
-                ? `×${assignedSlots.length}`
-                : `#${assignedSlots[0].index + 1}`
-            : '+';
+        const playerCount = appState.slots.filter(s => s.preset && s.preset.id === preset.id).length;
+        const isActive = playerCount > 0;
+        const countLabel = `${playerCount} ${preset.shortName} player${playerCount === 1 ? '' : 's'}`;
 
-        const card = document.createElement('button');
-        card.type = 'button';
-        card.setAttribute('aria-label', `${isActive ? 'Remove' : 'Add'} ${preset.shortName}`);
-        card.setAttribute('aria-pressed', isActive);
-        card.className = `studio-token px-2.5 py-1.5 rounded-lg cursor-pointer flex items-center justify-between gap-1.5 select-none ${isActive ? meta.activeClass : ''}`;
+        const card = document.createElement('div');
+        card.className = `studio-token px-2.5 py-1.5 rounded-lg cursor-pointer flex items-center justify-between gap-1.5 select-none ${isActive ? `is-active ${meta.activeClass}` : ''}`;
         card.style.setProperty('--sound-color', meta.color);
         card.dataset.category = preset.category;
-        card.innerHTML = `<span class="sound-icon" aria-hidden="true">${instrumentGlyph(preset.category)}</span><span class="sound-info"><strong>${preset.shortName}</strong><small>${meta.name}</small></span><span class="sound-add" aria-hidden="true">${isActive ? '✓' : '+'}</span>`;
+        card.dataset.presetId = preset.id;
+        card.innerHTML = `<button type="button" class="sound-main" data-sound-action="main" aria-label="${isActive ? countLabel : `Add ${preset.shortName}`}"><span class="sound-icon" aria-hidden="true">${instrumentGlyph(preset.category)}</span><span class="sound-info"><strong>${preset.shortName}</strong><small>${meta.name}</small></span></button>${
+            isActive
+                ? `<span class="sound-stepper" role="group" aria-label="${countLabel}"><button type="button" data-sound-action="remove" aria-label="Remove a ${preset.shortName} player" title="Remove a player">−</button><output aria-live="polite">${playerCount}</output><button type="button" data-sound-action="add" aria-label="Add another ${preset.shortName} player" title="Add another player">+</button></span>`
+                : '<span class="sound-add" aria-hidden="true">+</span>'
+        }`;
 
         let pressTimer = null;
         let startedDrag = false;
+        let touchPress = null;
+        const beginDrag = (x, y) => {
+            clearTimeout(pressTimer);
+            touchPress = null;
+            startedDrag = true;
+            startTokenDrag(preset, x, y);
+        };
 
         card.addEventListener('pointerdown', e => {
             startedDrag = false;
-            if (e.pointerType !== 'mouse') return;
-            pressTimer = setTimeout(() => {
-                startedDrag = true;
-                startTokenDrag(preset, e.clientX, e.clientY);
-            }, 170);
+            touchPress = null;
+            if (e.button !== 0 || e.target.closest('.sound-stepper')) return;
+            if (e.pointerType === 'mouse') {
+                pressTimer = setTimeout(() => beginDrag(e.clientX, e.clientY), 170);
+                return;
+            }
+            // Touch lifts a sound with a long press, or a swipe up toward the stage.
+            touchPress = { x: e.clientX, y: e.clientY, lastX: e.clientX, lastY: e.clientY };
+            pressTimer = setTimeout(() => touchPress && beginDrag(touchPress.lastX, touchPress.lastY), 320);
         });
 
-        card.addEventListener('click', () => {
-            clearTimeout(pressTimer);
-            if (!startedDrag && !appState.draggedPresetId) {
-                assignPresetToSlot(preset.id);
+        card.addEventListener('pointermove', e => {
+            if (!touchPress) return;
+            touchPress.lastX = e.clientX;
+            touchPress.lastY = e.clientY;
+            const dx = e.clientX - touchPress.x;
+            const dy = e.clientY - touchPress.y;
+            if (dy < -12 && Math.abs(dy) > Math.abs(dx) * 1.3) beginDrag(e.clientX, e.clientY);
+            else if (Math.hypot(dx, dy) > 10) {
+                clearTimeout(pressTimer);
+                touchPress = null;
             }
         });
 
-        card.addEventListener('pointercancel', () => clearTimeout(pressTimer));
-        card.addEventListener('pointerleave', () => {
+        // Once a sound is lifted, the finger moves the sound instead of scrolling the list.
+        card.addEventListener(
+            'touchmove',
+            e => {
+                if (startedDrag && appState.draggedPresetId) e.preventDefault();
+            },
+            { passive: false },
+        );
+        card.addEventListener('contextmenu', e => {
+            if (touchPress || startedDrag) e.preventDefault();
+        });
+
+        card.addEventListener('click', e => {
             clearTimeout(pressTimer);
+            if (startedDrag || appState.draggedPresetId) return;
+            const action = e.target.closest('[data-sound-action]')?.dataset.soundAction;
+            if (action === 'remove') removePresetPlayer(preset.id);
+            else if (action === 'add' || !isActive) assignPresetToSlot(preset.id);
+        });
+
+        card.addEventListener('pointercancel', () => {
+            clearTimeout(pressTimer);
+            touchPress = null;
+        });
+        card.addEventListener('pointerleave', e => {
+            if (e.pointerType === 'mouse') clearTimeout(pressTimer);
         });
 
         palette.appendChild(card);
@@ -118,8 +158,14 @@ function startTokenDrag(preset, clientX, clientY) {
     ghost.style.display = 'flex';
     updatePedestalHUDBadges();
 
-    const onUp = () => {
+    const stopListening = () => {
+        window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onCancel);
+    };
+    const onUp = e => {
         if (appState.draggedPresetId) {
+            // A touch drop lands where the finger lifts, even if it never hovered first.
+            if (e.pointerType !== 'mouse') checkPedestalHover(e.clientX, e.clientY);
             if (appState.hoveredSlotIndex >= 0 && appState.hoveredSlotIndex < stageState.unlockedSlots) {
                 editStageMeasure();
                 assignPresetToSlot(appState.draggedPresetId, appState.hoveredSlotIndex);
@@ -128,9 +174,14 @@ function startTokenDrag(preset, clientX, clientY) {
             }
             endTokenDrag();
         }
-        window.removeEventListener('pointerup', onUp);
+        stopListening();
+    };
+    const onCancel = () => {
+        endTokenDrag();
+        stopListening();
     };
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
 }
 
 function endTokenDrag() {
@@ -172,7 +223,9 @@ function renderTimelineTracks() {
     const ruler = document.createElement('div');
     ruler.className = 'beat-ruler';
     ruler.setAttribute('aria-hidden', 'true');
-    ruler.innerHTML = `<div class="beat-step-ruler">${[1, 5, 9, 13].map(n => `<span class="is-downbeat">${n}</span><span>${n + 1}</span><span>${n + 2}</span><span>${n + 3}</span>`).join('')}</div>`;
+    const stepsPerBar = getStepsPerBar();
+    const stepsPerBeat = getMeter().stepsPerBeat;
+    ruler.innerHTML = `<div class="beat-step-ruler">${Array.from({ length: stepsPerBar }, (_, s) => (s % stepsPerBeat === 0 ? `<span class="is-downbeat">${s + 1}</span>` : `<span>${s + 1}</span>`)).join('')}</div>`;
     document.querySelector('#timeline-panel > div:nth-child(2)')?.appendChild(ruler);
 
     activeSlots.forEach(slot => {
@@ -192,7 +245,7 @@ function renderTimelineTracks() {
         row.className = `timeline-track-row flex items-center gap-1.5 bg-[#070b16]/90 border border-white/5 rounded-lg px-2 ${audible ? '' : 'opacity-45'}`;
 
         let stepsHTML = '';
-        for (let s = 0; s < 16; s++) {
+        for (let s = 0; s < stepsPerBar; s++) {
             const stepEvt = stepsArr[s];
             const h = heightsArr[s] || 0;
             const hasHit = stepEvt !== null && stepEvt !== undefined && h > 0;
@@ -203,7 +256,7 @@ function renderTimelineTracks() {
                 <button type="button" data-step="${s}" aria-label="${slot.preset.shortName}, step ${s + 1}" aria-pressed="${hasHit}"
                      onclick="handleStepCellClick(${slot.index}, ${s}, event)"
                      oncontextmenu="event.preventDefault(); handleStepCellClick(${slot.index}, ${s}, { button: 2 });"
-                     class="timeline-cell relative rounded bg-[#0c1222] border border-white/5 flex items-end p-0.5 overflow-hidden"
+                     class="timeline-cell${s % stepsPerBeat === 0 ? ' is-beat-start' : ''} relative rounded bg-[#0c1222] border border-white/5 flex items-end p-0.5 overflow-hidden"
                      title="Step ${s + 1} • Click to toggle or customize">
                     <div class="w-full rounded-sm pointer-events-none" style="height:${barHeightPct}%; background:${barColor}"></div>
                 </button>
@@ -233,8 +286,9 @@ function renderTimelineTracks() {
 
                 <!-- Track Action Buttons -->
                 <div class="flex items-center gap-0.5">
+                    <button onclick="openPerformerEffects(${slot.index})" class="track-fx-button" aria-label="Effects for ${slot.preset.shortName}" title="Performer effects">FX${slot.effects?.length ? ` · ${slot.effects.length}` : ''}</button>
                     <button onclick="cycleSlotOctave(${slot.index})" class="px-1 h-4 rounded text-[8px] font-mono font-semibold bg-white/10 hover:bg-white/20 text-amber-200" title="Transpose Octave (-12 / 0 / +12 semitones)">${octText}</button>
-                    <button onclick="randomizeSlotPattern(${slot.index})" class="px-1 h-4 rounded text-[8px] font-mono font-semibold bg-white/10 hover:bg-purple-500/30 text-purple-200" title="Randomize 16-Step Pattern">RND</button>
+                    <button onclick="randomizeSlotPattern(${slot.index})" class="px-1 h-4 rounded text-[8px] font-mono font-semibold bg-white/10 hover:bg-purple-500/30 text-purple-200" title="Randomize Pattern">RND</button>
                     <button onclick="resetSlotPattern(${slot.index})" class="px-1 h-4 rounded text-[8px] font-mono font-semibold bg-white/10 hover:bg-cyan-500/30 text-cyan-200" title="Reset Pattern">RST</button>
                     <button onclick="toggleSlotMute(${slot.index})" aria-label="Mute ${slot.preset.shortName}" aria-pressed="${slot.muted}" class="w-4 h-4 rounded text-[9px] font-mono font-bold ${slot.muted ? 'bg-amber-400 text-slate-950' : 'bg-white/10 hover:bg-white/20 text-slate-300'}" title="Mute">M</button>
                     <button onclick="toggleSlotSolo(${slot.index})" aria-label="Solo ${slot.preset.shortName}" aria-pressed="${slot.solo}" class="w-4 h-4 rounded text-[9px] font-mono font-bold ${slot.solo ? 'bg-cyan-400 text-slate-950' : 'bg-white/10 hover:bg-white/20 text-slate-300'}" title="Solo">S</button>
@@ -242,7 +296,7 @@ function renderTimelineTracks() {
                 </div>
             </div>
 
-            <div class="track-steps grid grid-cols-16 gap-1">
+            <div class="track-steps grid gap-1">
                 ${stepsHTML}
             </div>
         `;
@@ -284,14 +338,14 @@ function alignBeatRuler() {
 
 function highlightSequencerStep(stepIdx) {
     if (songState.heardMeasure && songState.heardMeasure.slots !== appState.slots) stepIdx = -1;
-    if (lastHighlightedStep >= 0 && lastHighlightedStep < 16 && lastHighlightedStep !== stepIdx) {
+    if (lastHighlightedStep >= 0 && cachedStepColumns[lastHighlightedStep] && lastHighlightedStep !== stepIdx) {
         const prevCells = cachedStepColumns[lastHighlightedStep];
         for (let i = 0; i < prevCells.length; i++) {
             prevCells[i].classList.remove('ring-1', 'ring-amber-300/90', 'bg-white/15');
         }
     }
 
-    if (stepIdx >= 0 && stepIdx < 16) {
+    if (stepIdx >= 0 && stepIdx < getStepsPerBar()) {
         const nextCells = cachedStepColumns[stepIdx];
         for (let i = 0; i < nextCells.length; i++) {
             nextCells[i].classList.add('ring-1', 'ring-amber-300/90', 'bg-white/15');

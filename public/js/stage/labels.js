@@ -14,7 +14,8 @@ function createPedestalHUDBadge(i) {
     badge.id = `pedestal-hud-${i}`;
     badge.className = 'pedestal-hud absolute z-10';
     badge.addEventListener('pointerdown', e => {
-        if (e.button === 0 && e.target.closest('.stage-track-label')) beginPlayerDrag(i, e.clientX, e.clientY);
+        if (e.button === 0 && !appState.draggedEffectId && e.target.closest('.stage-track-label'))
+            beginPlayerDrag(i, e.clientX, e.clientY);
     });
     badge.addEventListener('pointerup', () => {
         if (playerDrag?.active && i < stageState.unlockedSlots) appState.hoveredSlotIndex = i;
@@ -33,7 +34,7 @@ function updatePedestalHUDBadges() {
         const slot = stageState.slots[i];
         const badge = hudBadgeElements[i];
         if (!badge) continue;
-        const dragging = appState.draggedPresetId || playerDrag?.active;
+        const dragging = appState.draggedPresetId || appState.draggedEffectId || playerDrag?.active;
         const visible =
             i < stageState.unlockedSlots &&
             (slot?.preset || dragging) &&
@@ -46,7 +47,7 @@ function updatePedestalHUDBadges() {
             const meta = CATEGORY_META[slot.preset.category];
             const muted = !isSlotAudible(slot, stageState.slots);
             const name = slot.preset.shortName;
-            badge.innerHTML = `<div class="stage-track-chip"><button class="stage-track-label ${muted ? 'is-muted' : ''}" onclick="onStageLabelClick(${i})" aria-label="Edit ${name}" title="Edit ${name} · drag to move"><i style="background:${meta.color}"></i><span>${name}</span><span class="stage-edit-icon" aria-hidden="true">↗</span></button><button class="stage-remove-btn" onclick="removeStagePlayer(${i})" aria-label="Remove ${name}" title="Remove ${name}">×</button></div>`;
+            badge.innerHTML = `<div class="stage-track-chip"><button class="stage-track-label ${muted ? 'is-muted' : ''}" onclick="onStageLabelClick(${i})" aria-label="Edit ${name}" title="Edit ${name} · drag to move"><i style="background:${meta.color}"></i><span>${name}</span>${slot.effects?.some(effect => effect.enabled && effect.amount > 0) ? '<span class="stage-fx-mark" title="Effects active">FX</span>' : ''}<svg class="stage-edit-icon inline-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 11 11 5M6 5h5v5" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button class="stage-remove-btn" onclick="removeStagePlayer(${i})" aria-label="Remove ${name}" title="Remove ${name}">×</button></div>`;
         }
     }
 }

@@ -4,9 +4,13 @@
 class StudioAudioEngine {
     constructor() {
         this.ctx = null;
+        this.mixBus = null;
+        this.mixHeadroom = 1;
         this.masterGain = null;
         this.compressor = null;
+        this.limiter = null;
         this.analyser = null;
+        this.scopeAnalysers = null;
         this.reverbNode = null;
         this.reverbSend = null;
         this.delayNodeL = null;
@@ -23,6 +27,7 @@ class StudioAudioEngine {
         this.recordedChunks = [];
         this.isRecording = false;
         this.noiseBuffer = null;
+        this.slotEffectRacks = [];
         this.slotGains = [];
         this.slotPanners = [];
         this.activeBus = null;
@@ -43,18 +48,28 @@ class StudioAudioEngine {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         this.ctx = new AudioCtx();
 
+        // 0. Instrument Mix Bus. Every player sums here; its gain backs off as
+        // more players join so the master chain sees a similar level at 6 or 100.
+        this.mixBus = this.ctx.createGain();
+        this.mixBus.gain.setValueAtTime(1, this.ctx.currentTime);
+        this.mixHeadroom = 1;
+
         // 1. Master Dynamics Compressor
         this.compressor = this.ctx.createDynamicsCompressor();
         this.compressor.threshold.setValueAtTime(-16, this.ctx.currentTime);
-        this.compressor.knee.setValueAtTime(14, this.ctx.currentTime);
-        this.compressor.ratio.setValueAtTime(4.0, this.ctx.currentTime);
-        this.compressor.attack.setValueAtTime(0.004, this.ctx.currentTime);
-        this.compressor.release.setValueAtTime(0.15, this.ctx.currentTime);
+        this.compressor.knee.setValueAtTime(10, this.ctx.currentTime);
+        this.compressor.ratio.setValueAtTime(3.0, this.ctx.currentTime);
+        this.compressor.attack.setValueAtTime(0.008, this.ctx.currentTime);
+        this.compressor.release.setValueAtTime(0.18, this.ctx.currentTime);
 
-        // 2. Analog Tape Saturation Drive (WaveShaper)
+        // 2. Analog Tape Saturation Drive (WaveShaper). A WaveShaper flattens
+        // anything outside ±1, so it is fed at half level and its curve spans ±2.
+        const driveInput = this.ctx.createGain();
+        driveInput.gain.setValueAtTime(0.5, this.ctx.currentTime);
         this.driveNode = this.ctx.createWaveShaper();
         this.driveNode.curve = this.makeDistortionCurve(12);
         this.driveNode.oversample = '2x';
+        driveInput.connect(this.driveNode);
 
         // 3. 3-Band Mastering EQ (Low Shelf 100Hz, Mid Peak 1100Hz, High Shelf 6500Hz)
         this.eqLowNode = this.ctx.createBiquadFilter();
@@ -79,9 +94,25 @@ class StudioAudioEngine {
         this.djFilterNode.frequency.setValueAtTime(20000, this.ctx.currentTime);
         this.djFilterNode.Q.setValueAtTime(1.2, this.ctx.currentTime);
 
-        // 5. Master Output Gain & Analyser
+        // 5. Master Output Gain, Brickwall Limiter, Safety Clipper & Analyser
         this.masterGain = this.ctx.createGain();
         this.masterGain.gain.setValueAtTime(0.86, this.ctx.currentTime);
+
+        this.limiter = this.ctx.createDynamicsCompressor();
+        this.limiter.threshold.setValueAtTime(-3, this.ctx.currentTime);
+        this.limiter.knee.setValueAtTime(0, this.ctx.currentTime);
+        this.limiter.ratio.setValueAtTime(20, this.ctx.currentTime);
+        this.limiter.attack.setValueAtTime(0.001, this.ctx.currentTime);
+        this.limiter.release.setValueAtTime(0.12, this.ctx.currentTime);
+
+        // Rounds off whatever the limiter's attack lets through instead of
+        // letting the output hard-clip at full scale.
+        const clipInput = this.ctx.createGain();
+        clipInput.gain.setValueAtTime(0.5, this.ctx.currentTime);
+        const safetyClipper = this.ctx.createWaveShaper();
+        safetyClipper.curve = this.makeSaturationCurve(0.9);
+        safetyClipper.oversample = '2x';
+        clipInput.connect(safetyClipper);
 
         this.analyser = this.ctx.createAnalyser();
         this.analyser.fftSize = 128;
@@ -121,7 +152,7 @@ class StudioAudioEngine {
         this.delayWetGain.connect(this.compressor);
 
         // 8. Per-Slot Channel Strips (Volume Gain + Stereo Panner)
-        // Shared FX sends from master compressor avoid 200 redundant idle GainNodes at 100 stages
+        // Shared FX sends from the mix bus avoid 200 redundant idle GainNodes at 100 stages
         this.slotGains = [];
         this.slotPanners = [];
         for (let idx = 0; idx < MAX_SLOTS; idx++) {
@@ -134,42 +165,61 @@ class StudioAudioEngine {
             }
 
             g.connect(panner);
-            panner.connect(this.compressor);
+            panner.connect(this.mixBus);
 
             this.slotGains.push(g);
             this.slotPanners.push(panner);
         }
 
-        // Single shared Reverb & Delay send from the summed compressor bus
+        // Single shared Reverb & Delay send from the mix bus. Sends must tap the
+        // bus before the compressor: the returns feed the compressor, and
+        // tapping after it would loop each effect back into its own input.
         const sharedRevSend = this.ctx.createGain();
         sharedRevSend.gain.setValueAtTime(0.28, this.ctx.currentTime);
-        this.compressor.connect(sharedRevSend);
+        this.mixBus.connect(sharedRevSend);
         sharedRevSend.connect(this.reverbSend);
 
         const sharedDelSend = this.ctx.createGain();
         sharedDelSend.gain.setValueAtTime(0.32, this.ctx.currentTime);
-        this.compressor.connect(sharedDelSend);
+        this.mixBus.connect(sharedDelSend);
         sharedDelSend.connect(this.delayNodeL);
 
-        this.activeBus = this.compressor;
+        this.activeBus = this.mixBus;
 
-        // Connect Master Chain: Compressor -> Drive -> 3-Band EQ -> DJ Filter -> MasterGain -> Analyser -> Destination
+        // Connect Master Chain: Mix Bus -> Compressor -> Drive -> 3-Band EQ -> DJ Filter -> MasterGain
+        // -> Limiter -> Safety Clipper -> Analyser -> Destination
         this.reverbSend.connect(this.reverbNode);
         this.reverbNode.connect(this.compressor);
 
-        this.compressor.connect(this.driveNode);
+        this.mixBus.connect(this.compressor);
+        this.compressor.connect(driveInput);
         this.driveNode.connect(this.eqLowNode);
         this.eqLowNode.connect(this.eqMidNode);
         this.eqMidNode.connect(this.eqHighNode);
         this.eqHighNode.connect(this.djFilterNode);
         this.djFilterNode.connect(this.masterGain);
-        this.masterGain.connect(this.analyser);
+        this.masterGain.connect(this.limiter);
+        this.limiter.connect(clipInput);
+        safetyClipper.connect(this.analyser);
         this.analyser.connect(this.ctx.destination);
+
+        // Hi-res stereo tap for the pro output scope; the stage keeps the coarse analyser above.
+        const scopeSplitter = this.ctx.createChannelSplitter(2);
+        safetyClipper.connect(scopeSplitter);
+        this.scopeAnalysers = [0, 1].map(channel => {
+            const node = this.ctx.createAnalyser();
+            node.fftSize = 2048;
+            node.smoothingTimeConstant = 0.72;
+            node.minDecibels = -96;
+            node.maxDecibels = -6;
+            scopeSplitter.connect(node, channel);
+            return node;
+        });
 
         // Live Audio Recording Destination
         if (this.ctx.createMediaStreamDestination) {
             this.mediaDest = this.ctx.createMediaStreamDestination();
-            this.masterGain.connect(this.mediaDest);
+            safetyClipper.connect(this.mediaDest);
         }
 
         this.noiseBuffer = this.createNoiseBuffer();
@@ -177,20 +227,98 @@ class StudioAudioEngine {
         this.startScheduler();
     }
 
-    makeDistortionCurve(amount = 12) {
-        const k = Math.max(0, Number(amount)) * 1.6;
-        const nSamples = 8192;
+    // Curves are read at half level, so index -1..1 stands for a signal of -2..2.
+    // Below the knee the curve is a straight line at unity gain; above it the
+    // signal bends smoothly toward ±1 instead of flattening.
+    makeSaturationCurve(knee) {
+        const nSamples = 4096;
         const curve = new Float32Array(nSamples);
-        const deg = Math.PI / 180;
         for (let i = 0; i < nSamples; ++i) {
-            const x = (i * 2) / nSamples - 1;
-            curve[i] = k === 0 ? x : ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
+            const x = ((i * 2) / (nSamples - 1) - 1) * 2;
+            const level = Math.abs(x);
+            const shaped = level <= knee ? level : knee + (1 - knee) * Math.tanh((level - knee) / (1 - knee));
+            curve[i] = Math.sign(x) * shaped;
         }
         return curve;
     }
 
+    makeDistortionCurve(amount = 12) {
+        const drive = Math.max(0, Math.min(100, Number(amount) || 0)) / 100;
+        return this.makeSaturationCurve(0.9 - drive * 0.7);
+    }
+
+    // Spread the summed level of every audible player so a full stage
+    // lands near the same loudness as a six-piece band.
+    setEnsembleHeadroom(audiblePlayers, time) {
+        const headroom = 1 / Math.sqrt(Math.max(1, audiblePlayers / 6));
+        if (!this.mixBus || Math.abs(headroom - this.mixHeadroom) < 0.005) return;
+        this.mixHeadroom = headroom;
+        this.mixBus.gain.setTargetAtTime(headroom, time, 0.06);
+    }
+
+    // Rebuild only when the ordered active inserts change. Amount edits reuse nodes.
+    setSlotEffects(slotIndex, effects, time = this.ctx?.currentTime || 0, audible = true) {
+        if (!this.ctx || !this.slotGains[slotIndex]) return;
+        const active = normalizePerformerEffects(effects).filter(effect => effect.enabled);
+        const key = active.map(effect => effect.id).join('|');
+        let previous = this.slotEffectRacks[slotIndex];
+        if (!previous && !active.length) return;
+        if (previous?.key === key) {
+            previous.rack.update(active, time);
+            previous.rack.output.gain.setTargetAtTime(audible ? 1 : 0, time, 0.012);
+            return;
+        }
+        const rack = new PerformerEffectRack(this, active, time);
+        rack.output.gain.value = 0;
+        const input = this.slotGains[slotIndex];
+        const output = this.slotPanners[slotIndex];
+        if (!previous) {
+            const dryRack = new PerformerEffectRack(this, [], time);
+            input.connect(dryRack.input);
+            dryRack.output.connect(output);
+            input.disconnect(output);
+            previous = { key: '', rack: dryRack };
+        }
+        input.connect(rack.input);
+        rack.output.connect(output);
+        rack.output.gain.setTargetAtTime(audible ? 1 : 0, time, 0.012);
+        previous.rack.output.gain.setTargetAtTime(0, time, 0.012);
+        this.slotEffectRacks[slotIndex] = { key, rack };
+        if (previous)
+            setTimeout(
+                () => {
+                    this.retirePerformerRack(input, previous.rack, time + 0.1);
+                },
+                Math.max(0, time - this.ctx.currentTime) * 1000 + 120,
+            );
+    }
+
+    retirePerformerRack(input, rack, afterTime) {
+        // Audio time can stop during a suspended cinematic, while wall time keeps going.
+        if (this.ctx.state !== 'closed' && (this.ctx.state === 'suspended' || this.ctx.currentTime < afterTime)) {
+            setTimeout(() => this.retirePerformerRack(input, rack, afterTime), 120);
+            return;
+        }
+        input.disconnect(rack.input);
+        rack.dispose();
+    }
+
+    syncPerformerEffects() {
+        if (!this.ctx || appState.isPlaying) return;
+        const slots = appState.slots;
+        slots.forEach(slot => {
+            if (slot.effects?.length || this.slotEffectRacks[slot.index])
+                this.setSlotEffects(
+                    slot.index,
+                    slot.preset ? slot.effects : [],
+                    this.ctx.currentTime,
+                    isSlotAudible(slot, slots),
+                );
+        });
+    }
+
     setSlotGain(slotIndex, volumeValue) {
-        if (appState.isPlaying && !songState.audition && songState.playMeasure?.slots !== appState.slots) return;
+        if (appState.isPlaying && songState.playMeasure?.slots !== appState.slots) return;
         if (this.ctx && this.slotGains[slotIndex]) {
             this.slotGains[slotIndex].gain.setTargetAtTime(
                 Math.max(0, Math.min(1.2, volumeValue)),
@@ -201,7 +329,7 @@ class StudioAudioEngine {
     }
 
     setSlotPan(slotIndex, panValue) {
-        if (appState.isPlaying && !songState.audition && songState.playMeasure?.slots !== appState.slots) return;
+        if (appState.isPlaying && songState.playMeasure?.slots !== appState.slots) return;
         if (this.ctx && this.slotPanners[slotIndex] && this.slotPanners[slotIndex].pan) {
             this.slotPanners[slotIndex].pan.setTargetAtTime(
                 Math.max(-1, Math.min(1, Number(panValue) || 0)),
@@ -217,6 +345,7 @@ class StudioAudioEngine {
         const dotted8th = (60 / clampedBpm) * 0.75;
         this.delayNodeL.delayTime.setTargetAtTime(dotted8th, this.ctx.currentTime, 0.03);
         this.delayNodeR.delayTime.setTargetAtTime(dotted8th * 0.666, this.ctx.currentTime, 0.03);
+        this.syncPerformerEffects();
     }
 
     setDJFilter(morphVal, qVal) {
@@ -283,7 +412,7 @@ class StudioAudioEngine {
     }
 
     getTargetBus() {
-        return this.activeBus || this.compressor;
+        return this.activeBus || this.mixBus;
     }
 
     createNoiseBuffer() {
@@ -343,8 +472,10 @@ class StudioAudioEngine {
         this.nextNoteTime +=
             secondsPer16th +
             (this.current16thStep % 2 === 0 ? secondsPer16th * swingRatio : -secondsPer16th * swingRatio);
-        this.current16thStep = (this.current16thStep + 1) % 16;
-        if (this.current16thStep === 0 && !songState.audition) {
+        this.current16thStep = this.current16thStep + 1 >= getStepsPerBar() ? 0 : this.current16thStep + 1;
+        if (this.current16thStep === 0 && songState.audition) {
+            songState.playMeasure = songState.measures[songState.selected] || songState.playMeasure;
+        } else if (this.current16thStep === 0) {
             const next = songState.measures.indexOf(songState.playMeasure) + 1;
             if (next < songState.measures.length) songState.playMeasure = songState.measures[next];
             else if (songState.loop && !cinematicState.active) songState.playMeasure = songState.measures[0];
@@ -370,9 +501,7 @@ class StudioAudioEngine {
     }
 
     scheduleStep(stepIndex, time) {
-        const measure = songState.audition
-            ? songState.measures[songState.selected]
-            : songState.playMeasure || songState.measures[0];
+        const measure = songState.playMeasure || songState.measures[0];
         const playbackSlots = measure.slots;
         const triggeredSlots = [];
         const safeBpm = Math.max(1, Math.min(2400, appState.bpm));
@@ -400,6 +529,7 @@ class StudioAudioEngine {
                     slot,
                     shiftedEvent,
                     noteTime,
+                    velocity: this.stepVelocity(heightsArr[stepIndex]),
                 });
                 triggeredSlots.push({
                     slotIndex: slot.index,
@@ -431,37 +561,66 @@ class StudioAudioEngine {
             selectedTriggers = uniqueFirst.concat(extras).slice(0, MAX_VOICES_PER_STEP);
         }
 
-        const ensembleAttenuation = totalAudibleSlots > 6 ? 1 / Math.pow(totalAudibleSlots / 5, 0.36) : 1.0;
+        measure.slots.forEach(slot => {
+            if (slot.effects?.length || this.slotEffectRacks[slot.index])
+                this.setSlotEffects(
+                    slot.index,
+                    slot.preset ? slot.effects : [],
+                    time,
+                    isSlotAudible(slot, measure.slots),
+                );
+        });
+        this.setEnsembleHeadroom(totalAudibleSlots, time);
 
-        selectedTriggers.forEach(({ slot, shiftedEvent, noteTime }) => {
+        selectedTriggers.forEach(({ slot, shiftedEvent, noteTime, velocity }) => {
+            // Bars can set different levels for the same player. Glide rather
+            // than jump so a note still ringing from the last bar doesn't click.
             if (this.slotGains[slot.index]) {
-                this.slotGains[slot.index].gain.setValueAtTime(slot.volume * ensembleAttenuation, time);
+                this.slotGains[slot.index].gain.setTargetAtTime(slot.volume, time, 0.008);
             }
-            if (this.slotPanners[slot.index]?.pan) this.slotPanners[slot.index].pan.setValueAtTime(slot.pan || 0, time);
-            this.activeBus = this.slotGains[slot.index] || this.compressor;
+            if (this.slotPanners[slot.index]?.pan)
+                this.slotPanners[slot.index].pan.setTargetAtTime(slot.pan || 0, time, 0.008);
+            const channel = this.slotGains[slot.index] || this.mixBus;
+            this.activeBus = velocity < 0.995 ? this.createVelocityBus(channel, velocity) : channel;
             this.triggerInstrument(slot.preset.synthType, shiftedEvent, noteTime, stepIndex);
         });
-        this.activeBus = this.compressor;
+        this.activeBus = this.mixBus;
 
         this.stepQueue.push({ step: stepIndex, time: time, triggeredSlots, measure });
+    }
+
+    // Step heights double as velocity: accents play at full level and
+    // ghost notes sit about 8 dB under them.
+    stepVelocity(height) {
+        const value = Number(height);
+        return 0.25 + 0.75 * (value > 0 ? Math.min(1, value) : 0.85);
+    }
+
+    createVelocityBus(destination, velocity) {
+        const bus = this.ctx.createGain();
+        bus.gain.value = velocity;
+        bus.connect(destination);
+        return bus;
     }
 
     triggerPreview(preset, slotIndex = -1, customEvent = null) {
         if (!this.ctx) return;
         const slot = slotIndex >= 0 ? appState.slots[slotIndex] : null;
+        if (slot && (!appState.isPlaying || songState.playMeasure?.slots === appState.slots))
+            this.setSlotEffects(slotIndex, slot.effects);
         const stepsArr = slot ? getSlotSteps(slot) : preset.steps;
         const firstIdx = stepsArr.findIndex(s => s !== null);
         const evtToPlay = customEvent !== null ? customEvent : firstIdx >= 0 ? stepsArr[firstIdx] : null;
         if (evtToPlay !== null && evtToPlay !== undefined) {
             const pitchShift = slot ? slot.pitchShift || 0 : 0;
-            this.activeBus = slotIndex >= 0 && this.slotGains[slotIndex] ? this.slotGains[slotIndex] : this.compressor;
+            this.activeBus = slotIndex >= 0 && this.slotGains[slotIndex] ? this.slotGains[slotIndex] : this.mixBus;
             this.triggerInstrument(
                 preset.synthType,
                 this.applyPitchShiftToStepEvent(evtToPlay, pitchShift),
                 this.ctx.currentTime + 0.01,
                 0,
             );
-            this.activeBus = this.compressor;
+            this.activeBus = this.mixBus;
         }
     }
 

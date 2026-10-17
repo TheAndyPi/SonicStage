@@ -54,6 +54,7 @@ function homeEnsembleSlots() {
         customHeights: null,
         volume: 0.85,
         pan: 0,
+        effects: [],
         pitchShift: 0,
         muted: false,
         solo: false,
@@ -93,7 +94,7 @@ function syncStageToMeasure() {
             ? songState.measures[0]
             : songState.heardMeasure || songState.playMeasure || selected
         : appState.isPlaying
-          ? songState.heardMeasure || (songState.audition ? selected : songState.playMeasure) || selected
+          ? songState.heardMeasure || songState.playMeasure || selected
           : selected;
     const changed = stageState.measure !== measure;
     const previousCapacity = stageState.unlockedSlots;
@@ -156,6 +157,7 @@ function cloneMeasure(source, empty = false) {
             solo: empty ? false : slot.solo,
             volume: empty ? 0.85 : slot.volume,
             pan: empty ? 0 : slot.pan,
+            effects: empty ? [] : normalizePerformerEffects(slot.effects),
             pitchShift: empty ? 0 : slot.pitchShift,
             energy: 0,
             hitCount: 0,
@@ -170,6 +172,7 @@ function songDocument() {
         version: 1,
         title: document.getElementById('project-title').value || 'Untitled song',
         bpm: appState.bpm,
+        timeSignature: appState.timeSignature,
         rootKey: appState.rootKey,
         scaleMode: appState.scaleMode,
         globalSwing: appState.globalSwing,
@@ -186,6 +189,7 @@ function songDocument() {
                     heights: getSlotHeights(s),
                     volume: s.volume,
                     pan: s.pan,
+                    effects: normalizePerformerEffects(s.effects),
                     pitchShift: s.pitchShift,
                     muted: s.muted,
                     solo: s.solo,
@@ -214,9 +218,10 @@ function readSongDocument(data) {
         !Number.isInteger(data.rootKey) ||
         !finite(data.rootKey, 0, 11) ||
         !Object.hasOwn(SCALE_DEFINITIONS, data.scaleMode) ||
-        !finite(data.globalSwing, 0, 0.65)
+        !finite(data.globalSwing, 0, 0.65) ||
+        (data.timeSignature !== undefined && !Object.hasOwn(TIME_SIGNATURES, data.timeSignature))
     )
-        throw new Error('Invalid song tempo or harmony.');
+        throw new Error('Invalid song tempo, meter, or harmony.');
     // Build and validate the entire document before replacing the current song.
     const measures = data.measures.map(raw => {
         if (!raw || typeof raw.label !== 'string' || !Array.isArray(raw.slots) || raw.slots.length > MAX_SLOTS)
@@ -259,6 +264,20 @@ function readSongDocument(data) {
                                 (typeof v === 'string' && v.length <= 16) ||
                                 (Array.isArray(v) && v.length <= 16 && v.every(validNote))),
                     ));
+            if (
+                saved.effects !== undefined &&
+                (!Array.isArray(saved.effects) ||
+                    saved.effects.length > MAX_PERFORMER_EFFECTS ||
+                    saved.effects.some(
+                        effect =>
+                            !effect ||
+                            !PERFORMER_EFFECT_BY_ID.has(effect.id) ||
+                            !finite(effect.amount, 0, 1) ||
+                            typeof effect.enabled !== 'boolean',
+                    ) ||
+                    new Set(saved.effects.map(effect => effect.id)).size !== saved.effects.length)
+            )
+                throw new Error('Invalid performer effects.');
             if (!saved.steps.every(validStep)) throw new Error('Invalid beat data.');
             used.add(saved.index);
             Object.assign(measure.slots[saved.index], {
@@ -267,6 +286,7 @@ function readSongDocument(data) {
                 customHeights: [...saved.heights],
                 volume: saved.volume,
                 pan: saved.pan,
+                effects: normalizePerformerEffects(saved.effects),
                 pitchShift: saved.pitchShift,
                 muted: saved.muted,
                 solo: saved.solo,
@@ -274,7 +294,7 @@ function readSongDocument(data) {
         });
         return measure;
     });
-    return { ...data, measures };
+    return { ...data, timeSignature: data.timeSignature || '4/4', measures };
 }
 
 function applySongDocument(data) {
@@ -291,11 +311,13 @@ function applySongDocument(data) {
     songState.heardMeasure = null;
     appState.slots = songState.playMeasure.slots;
     appState.bpm = data.bpm;
+    appState.timeSignature = data.timeSignature;
     appState.rootKey = data.rootKey;
     appState.scaleMode = data.scaleMode;
     appState.globalSwing = data.globalSwing;
     document.getElementById('bpm-number-input').value = data.bpm;
     document.getElementById('bpm-slider').value = bpmToSlider(data.bpm);
+    applyMeterLayout();
     document.getElementById('key-select').value = data.rootKey;
     document.getElementById('scale-select').value = data.scaleMode;
     document.getElementById('fx-global-swing').value = (data.globalSwing / 0.55) * 100;
@@ -350,6 +372,7 @@ function setSongView(view) {
     document.getElementById('btn-stage-view').setAttribute('aria-pressed', view === 'stage');
     document.getElementById('btn-song-view').setAttribute('aria-pressed', view === 'song');
     renderSongArrangement();
+    if (appState.libraryTab === 'effects') renderEffectsLibrary();
     if (view === 'stage') onWindowResize();
 }
 
@@ -388,6 +411,35 @@ function playSongFrom(index) {
     renderSongArrangement();
 }
 
+// Moves the editor and the playhead together, so the stage shows the bar you picked.
+function goToSongMeasure(index) {
+    if (!Number.isInteger(index) || index < 0 || index >= songState.measures.length) return;
+    selectSongMeasure(index, true);
+    if (appState.isPlaying && !songState.audition) playSongFrom(index);
+    else {
+        resetSongTransport(index);
+        updatePlayButtonUI();
+        renderSongArrangement();
+    }
+}
+
+function playFromMeasure(index) {
+    selectSongMeasure(index);
+    playSongFrom(index);
+}
+
+// While playing, the current bar always finishes; the loop takes over at the next barline.
+function toggleMeasureLoop() {
+    songState.audition = !songState.audition;
+    if (songState.audition && !appState.isPlaying) {
+        resetSongTransport();
+        audioEngine.init();
+        appState.isPlaying = true;
+    }
+    updatePlayButtonUI();
+    renderSongArrangement();
+}
+
 function stopSong() {
     appState.isPlaying = false;
     resetSongTransport();
@@ -396,15 +448,48 @@ function stopSong() {
     updateSongPlayhead();
 }
 
-function updateTransportPosition() {
+function applyMeterLayout() {
+    const meter = getMeter();
+    document.documentElement.style.setProperty('--bar-steps', getStepsPerBar());
+    document.getElementById('meter-select').value = appState.timeSignature;
+    document.getElementById('song-meter-hint').textContent = appState.timeSignature;
+    for (let b = 0; b < 7; b++) document.getElementById(`beat-led-${b}`).hidden = b >= meter.beats;
+}
+
+function setTimeSignature(signature) {
+    if (!Object.hasOwn(TIME_SIGNATURES, signature) || signature === appState.timeSignature) return;
+    appState.timeSignature = signature;
+    if (audioEngine.current16thStep >= getStepsPerBar()) audioEngine.current16thStep = 0;
+    applyMeterLayout();
+    refreshAllUI();
+    renderSongArrangement();
+}
+
+function transportMeasureIndex() {
     const measure = songState.heardMeasure || songState.playMeasure || songState.measures[0];
-    const index = Math.max(0, songState.measures.indexOf(measure));
-    const beat = songState.heardMeasure ? Math.floor(appState.currentStep / 4) : 0;
+    return Math.max(0, songState.measures.indexOf(measure));
+}
+
+function updateTransportPosition() {
+    const index = transportMeasureIndex();
+    document.getElementById('bar-prev').disabled = index === 0;
+    document.getElementById('bar-next').disabled = index === songState.measures.length - 1;
+    const meter = getMeter();
+    const stepsPerBar = getStepsPerBar();
+    const step = songState.heardMeasure ? Math.min(appState.currentStep, stepsPerBar - 1) : 0;
+    const beat = Math.floor(step / meter.stepsPerBeat);
+    const elapsed = (index * stepsPerBar + step) * getSecondsPerStep();
+    const length = songState.measures.length * stepsPerBar * getSecondsPerStep();
     document.getElementById('transport-measure').textContent = `${index + 1} / ${songState.measures.length}`;
+    document.getElementById('transport-time').textContent = formatSongTime(elapsed, true);
+    document.getElementById('transport-duration').textContent = `/ ${formatSongTime(length)}`;
     document
         .getElementById('transport-position')
-        .setAttribute('aria-label', `Measure ${index + 1} of ${songState.measures.length}, beat ${beat + 1} of 4`);
-    for (let b = 0; b < 4; b++) {
+        .setAttribute(
+            'aria-label',
+            `Measure ${index + 1} of ${songState.measures.length}, beat ${beat + 1} of ${meter.beats}, ${formatSongTime(elapsed)} of ${formatSongTime(length)}`,
+        );
+    for (let b = 0; b < meter.beats; b++) {
         const led = document.getElementById(`beat-led-${b}`);
         const active = b === beat;
         led.className = 'beat-light';
@@ -421,7 +506,7 @@ function updateSongPlayhead() {
     const measureIndex = playing ? songState.measures.indexOf(songState.heardMeasure) : -1;
     const step = playing ? appState.currentStep : -1;
     document.getElementById('song-position').textContent = playing
-        ? `${songState.audition ? 'Audition' : 'Playing'} · Measure ${measureIndex + 1} · Beat ${Math.floor(step / 4) + 1}`
+        ? `${songState.audition ? 'Audition' : 'Playing'} · Measure ${measureIndex + 1} · Beat ${Math.floor(step / getMeter().stepsPerBeat) + 1}`
         : appState.isPlaying
           ? 'Ready'
           : 'Stopped / paused';
@@ -445,6 +530,7 @@ function renderSongArrangement() {
         `Bar ${songState.selected + 1} of ${songState.measures.length}`;
     document.getElementById('measure-prev').disabled = songState.selected === 0;
     document.getElementById('measure-next').disabled = songState.selected === songState.measures.length - 1;
+    document.getElementById('bar-loop').setAttribute('aria-pressed', songState.audition);
     document.getElementById('song-move-left').disabled = songState.selected === 0;
     document.getElementById('song-move-right').disabled = songState.selected === songState.measures.length - 1;
     document.getElementById('song-delete').disabled = songState.measures.length === 1;
@@ -455,9 +541,14 @@ function renderSongArrangement() {
         document.getElementById('song-measure-label').value = selected.label;
     document.getElementById('song-loop').setAttribute('aria-pressed', songState.loop);
     document.getElementById('song-audition').setAttribute('aria-pressed', songState.audition);
-    const seconds = Math.round((songState.measures.length * 4 * 60) / appState.bpm);
+    const stepsPerBar = getStepsPerBar();
+    const stepsPerBeat = getMeter().stepsPerBeat;
+    const seconds = songState.measures.length * stepsPerBar * getSecondsPerStep();
     document.getElementById('song-summary').textContent =
-        ` / ${songState.measures.length} ${songState.measures.length === 1 ? 'measure' : 'measures'} · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+        ` / ${songState.measures.length} ${songState.measures.length === 1 ? 'measure' : 'measures'} · ${formatSongTime(seconds)}`;
+    const beatRuler = Array.from({ length: stepsPerBar }, (_, s) =>
+        s % stepsPerBeat === 0 ? s / stepsPerBeat + 1 : '·',
+    ).join(' ');
     if (songState.view !== 'song') return;
     const escape = value =>
         String(value).replace(
@@ -465,32 +556,98 @@ function renderSongArrangement() {
             c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
         );
     const measures = songState.measures;
-    const maps = measures.map(m => new Map(m.slots.filter(s => s.preset).map(s => [s.preset.id, s])));
-    const presets = INSTRUMENT_PRESETS.filter(p => maps.some(map => map.has(p.id)));
+    const maps = measures.map(m => new Map(m.slots.filter(s => s.preset).map(s => [s.index, s])));
+    const rows = arrangementRows(measures);
     let html = '<thead><tr><th class="instrument-label">INSTRUMENT / BAR</th>';
     measures.forEach((m, i) => {
-        html += `<th data-measure-index="${i}" class="${i === songState.selected ? 'is-selected' : ''}" scope="col"><button class="measure-select" aria-pressed="${i === songState.selected}" onclick="selectSongMeasure(${i})"><strong>MEASURE ${String(i + 1).padStart(2, '0')}</strong>${escape(m.label || `${maps[i].size} instruments`)}<span class="block mt-1 text-[8px] text-slate-500">1 · · · 2 · · · 3 · · · 4 · · ·</span></button></th>`;
+        html += `<th data-measure-index="${i}" class="${i === songState.selected ? 'is-selected' : ''}" scope="col"><button class="measure-select" aria-pressed="${i === songState.selected}" onclick="selectSongMeasure(${i})"><strong>MEASURE ${String(i + 1).padStart(2, '0')}</strong>${escape(m.label || `${maps[i].size} instruments`)}<span class="block mt-1 text-[8px] text-slate-500">${beatRuler}</span></button>${arrangementBarEffects(m, i)}<button class="measure-play" onclick="playFromMeasure(${i})" aria-label="Play from measure ${i + 1}" title="Play from here"></button></th>`;
     });
     html += '</tr></thead><tbody>';
-    presets.forEach(preset => {
+    rows.forEach(({ preset, index: playerIndex }) => {
         const color = CATEGORY_META[preset.category].color;
-        html += `<tr><th scope="row" class="instrument-label" style="color:${color};--track-color:${color}">${escape(preset.shortName)}</th>`;
+        html += `<tr><th scope="row" class="instrument-label" style="color:${color};--track-color:${color}">${escape(preset.shortName)}<small>PLAYER ${String(playerIndex + 1).padStart(2, '0')}</small></th>`;
         maps.forEach((map, i) => {
-            const slot = map.get(preset.id);
+            const candidate = map.get(playerIndex);
+            const slot = candidate?.preset.id === preset.id ? candidate : null;
             const steps = slot ? getSlotSteps(slot) : [];
             const heights = slot ? getSlotHeights(slot) : [];
             const muted = slot && !isSlotAudible(slot, measures[i].slots);
-            html += `<td data-measure-index="${i}" class="${i === songState.selected ? 'is-selected' : ''}"><button class="song-clip ${muted ? 'is-muted' : ''}" onclick="selectSongMeasure(${i})" aria-label="Edit ${escape(preset.shortName)}, measure ${i + 1}${muted ? ', muted' : ''}">`;
-            for (let s = 0; s < 16; s++)
-                html += `<span${steps[s] != null ? ` style="background:${color};height:${Math.max(25, (heights[s] || 0.8) * 100)}%"` : ''}></span>`;
-            html += '</button></td>';
+            html += `<td data-measure-index="${i}" ${slot ? `data-slot-index="${slot.index}"` : 'data-empty-clip'} class="${i === songState.selected ? 'is-selected' : ''}"><button class="song-clip ${muted ? 'is-muted' : ''}${slot?.effects?.length ? ' has-effects' : ''}" onclick="${slot ? `selectArrangementClip(${i},${slot.index})` : `selectSongMeasure(${i})`}" aria-label="Edit ${escape(preset.shortName)}, player ${playerIndex + 1}, measure ${i + 1}${slot ? '' : ', empty'}${muted ? ', muted' : ''}">`;
+            for (let s = 0; s < stepsPerBar; s++)
+                html += `<span${s % stepsPerBeat === 0 ? ' class="is-beat"' : ''}${steps[s] != null ? ` style="background:${color};height:${Math.max(25, (heights[s] || 0.8) * 100)}%"` : ''}></span>`;
+            html += `</button>${slot ? arrangementClipEffects(slot, i) : ''}</td>`;
         });
         html += '</tr>';
     });
-    if (!presets.length)
+    if (!rows.length)
         html += `<tr><td colspan="${measures.length + 1}" class="text-slate-400 p-6"><p style="padding:24px">Add a sound or generate a song to start.</p></td></tr>`;
     document.getElementById('song-sheet').innerHTML = html + '</tbody>';
+    fitSongSheet();
     updateSongPlayhead();
+}
+
+const SONG_ZOOM_KEY = 'sonicstage-song-zoom';
+const SONG_ZOOM_STEPS = [0.5, 0.67, 0.8, 1, 1.25, 1.5, 2, 3];
+let songZoom = 1;
+
+// At 100% the sheet fills its window; cells only shrink below their base size when zoomed out.
+function fitSongSheet() {
+    const scroller = document.getElementById('song-sheet-scroll');
+    const sheet = document.getElementById('song-sheet');
+    const head = sheet.tHead;
+    document.getElementById('song-zoom-fit').textContent = `${Math.round(songZoom * 100)}%`;
+    document.getElementById('song-zoom-out').disabled = songZoom <= SONG_ZOOM_STEPS[0];
+    document.getElementById('song-zoom-in').disabled = songZoom >= SONG_ZOOM_STEPS.at(-1);
+    if (!head || !scroller.clientWidth) return;
+    const style = getComputedStyle(scroller);
+    const baseCol = parseFloat(style.getPropertyValue('--song-col-base')) || 176;
+    const baseRow = parseFloat(style.getPropertyValue('--song-row-base')) || 44;
+    const rows = sheet.querySelectorAll('tbody th[scope="row"]').length;
+    const fitCol = (scroller.clientWidth - head.rows[0].cells[0].offsetWidth) / songState.measures.length - 1;
+    const fitRow = rows ? (scroller.clientHeight - head.offsetHeight) / rows - 1 : baseRow;
+    scroller.style.setProperty('--song-col-w', `${Math.max(64, Math.floor(Math.max(baseCol, fitCol) * songZoom))}px`);
+    scroller.style.setProperty('--song-row-h', `${Math.max(18, Math.floor(Math.max(baseRow, fitRow) * songZoom))}px`);
+}
+
+function setSongZoom(zoom) {
+    const scroller = document.getElementById('song-sheet-scroll');
+    const next = Math.min(SONG_ZOOM_STEPS.at(-1), Math.max(SONG_ZOOM_STEPS[0], zoom));
+    const ratio = next / songZoom;
+    songZoom = next;
+    try {
+        localStorage.setItem(SONG_ZOOM_KEY, String(next));
+    } catch (_) {}
+    fitSongSheet();
+    scroller.scrollLeft *= ratio;
+    scroller.scrollTop *= ratio;
+}
+
+function initSongZoom() {
+    try {
+        songZoom = Math.min(
+            SONG_ZOOM_STEPS.at(-1),
+            Math.max(SONG_ZOOM_STEPS[0], Number(localStorage.getItem(SONG_ZOOM_KEY)) || 1),
+        );
+    } catch (_) {}
+    const scroller = document.getElementById('song-sheet-scroll');
+    const step = direction => {
+        const steps = direction > 0 ? SONG_ZOOM_STEPS : [...SONG_ZOOM_STEPS].reverse();
+        return steps.find(s => (direction > 0 ? s > songZoom + 0.001 : s < songZoom - 0.001)) ?? steps.at(-1);
+    };
+    document.getElementById('song-zoom-in').addEventListener('click', () => setSongZoom(step(1)));
+    document.getElementById('song-zoom-out').addEventListener('click', () => setSongZoom(step(-1)));
+    document.getElementById('song-zoom-fit').addEventListener('click', () => setSongZoom(1));
+    // Trackpad pinch arrives as a ctrl+wheel event.
+    scroller.addEventListener(
+        'wheel',
+        event => {
+            if (!event.ctrlKey && !event.metaKey) return;
+            event.preventDefault();
+            setSongZoom(songZoom * Math.exp(-event.deltaY * 0.01));
+        },
+        { passive: false },
+    );
+    new ResizeObserver(fitSongSheet).observe(scroller);
 }
 
 function moveSongMeasure(from, to) {
@@ -501,24 +658,55 @@ function moveSongMeasure(from, to) {
     selectSongMeasure(to, true);
 }
 
-// The sheet is re-rendered often, so dragging is delegated from its stable scroll container.
+// The sheet is re-rendered often, so dragging is delegated from its stable scroll container
+// and the column layout is reapplied every frame.
 function initMeasureDragging() {
     const scroller = document.getElementById('song-sheet-scroll');
+    const sheet = document.getElementById('song-sheet');
     let drag = null;
-    const headers = () => [...document.querySelectorAll('#song-sheet thead th[data-measure-index]')];
-    const clearMarkers = () =>
-        document
-            .querySelectorAll('#song-sheet .drop-before, #song-sheet .drop-after, #song-sheet .is-drag-source')
-            .forEach(el => el.classList.remove('drop-before', 'drop-after', 'is-drag-source'));
-    const insertionAt = clientX => {
-        const cells = headers();
-        const index = cells.findIndex(cell => {
-            const r = cell.getBoundingClientRect();
-            return clientX < r.left + r.width / 2;
-        });
-        return index === -1 ? cells.length : index;
+    const columns = () => {
+        if (drag.body !== sheet.tBodies[0]) {
+            drag.body = sheet.tBodies[0];
+            drag.cells = [];
+            sheet.querySelectorAll('[data-measure-index]').forEach(cell => {
+                (drag.cells[Number(cell.dataset.measureIndex)] ||= []).push(cell);
+            });
+            drag.applied = null;
+        }
+        return drag.cells;
     };
-    const autoScroll = () => {
+    const clearLayout = () =>
+        sheet.querySelectorAll('[data-measure-index]').forEach(cell => {
+            cell.style.transform = '';
+            cell.classList.remove('is-drag-column');
+        });
+    const layout = () => {
+        const cols = columns();
+        const head = cols[drag.from]?.[0];
+        if (!head) return;
+        const width = head.offsetWidth;
+        const dx = drag.x - drag.startX + scroller.scrollLeft - drag.startScroll;
+        const center = head.offsetLeft + dx + width / 2;
+        let to = 0;
+        cols.forEach((cells, i) => {
+            if (i !== drag.from && cells[0].offsetLeft + cells[0].offsetWidth / 2 < center) to++;
+        });
+        drag.to = to;
+        cols[drag.from].forEach(cell => {
+            cell.classList.add('is-drag-column');
+            cell.style.transform = `translateX(${dx}px)`;
+        });
+        if (drag.applied === to) return;
+        drag.applied = to;
+        cols.forEach((cells, i) => {
+            if (i === drag.from) return;
+            const shift = i > drag.from && i <= to ? -width : i < drag.from && i >= to ? width : 0;
+            cells.forEach(cell => {
+                cell.style.transform = shift ? `translateX(${shift}px)` : '';
+            });
+        });
+    };
+    const frame = () => {
         if (!drag?.active) return;
         const r = scroller.getBoundingClientRect(),
             edge = 60;
@@ -528,28 +716,17 @@ function initMeasureDragging() {
                 : drag.x > r.right - edge
                   ? drag.x - (r.right - edge)
                   : 0;
-        if (speed) {
-            scroller.scrollLeft += speed * 0.35;
-            mark();
-        }
-        drag.frame = requestAnimationFrame(autoScroll);
-    };
-    const mark = () => {
-        clearMarkers();
-        const cells = headers();
-        cells[drag.from]?.classList.add('is-drag-source');
-        drag.insert = insertionAt(drag.x);
-        if (drag.insert === drag.from || drag.insert === drag.from + 1) return;
-        if (drag.insert < cells.length) cells[drag.insert].classList.add('drop-before');
-        else cells[cells.length - 1]?.classList.add('drop-after');
+        if (speed) scroller.scrollLeft += speed * 0.35;
+        layout();
+        drag.frame = requestAnimationFrame(frame);
     };
     const end = commit => {
         if (!drag) return;
-        const { active, from, insert, frame } = drag;
+        const { active, from, to, frame: pending } = drag;
         drag = null;
-        cancelAnimationFrame(frame);
-        clearMarkers();
+        cancelAnimationFrame(pending);
         document.body.classList.remove('is-dragging-measure');
+        clearLayout();
         if (!active) return;
         const suppress = event => {
             event.stopPropagation();
@@ -557,19 +734,29 @@ function initMeasureDragging() {
         };
         window.addEventListener('click', suppress, { capture: true, once: true });
         setTimeout(() => window.removeEventListener('click', suppress, { capture: true }), 0);
-        if (commit) moveSongMeasure(from, insert > from ? insert - 1 : insert);
+        if (commit) moveSongMeasure(from, to);
     };
     scroller.addEventListener('pointerdown', event => {
-        const cell = event.button === 0 && event.target.closest('thead th[data-measure-index]');
+        if (
+            event.button !== 0 ||
+            appState.draggedEffectId ||
+            event.target.closest('.measure-play,.measure-effects,.song-clip-effects')
+        )
+            return;
+        const cell = event.target.closest('#song-sheet [data-measure-index]');
         if (!cell) return;
         drag = {
             from: Number(cell.dataset.measureIndex),
+            to: Number(cell.dataset.measureIndex),
             startX: event.clientX,
             startY: event.clientY,
+            startScroll: scroller.scrollLeft,
             x: event.clientX,
             active: false,
-            insert: -1,
             frame: 0,
+            body: null,
+            cells: [],
+            applied: null,
         };
     });
     window.addEventListener('pointermove', event => {
@@ -579,9 +766,9 @@ function initMeasureDragging() {
             if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 6) return;
             drag.active = true;
             document.body.classList.add('is-dragging-measure');
-            drag.frame = requestAnimationFrame(autoScroll);
+            drag.frame = requestAnimationFrame(frame);
         }
-        mark();
+        layout();
     });
     window.addEventListener('pointerup', () => end(true));
     window.addEventListener('pointercancel', () => end(false));
@@ -598,6 +785,11 @@ function initSongComposer() {
         document.getElementById('song-save-status').textContent = 'Use Open song to restore a backup';
     }
     songState.playMeasure = songState.measures[songState.selected];
+    applyMeterLayout();
+    document.getElementById('meter-select').addEventListener('change', event => {
+        setTimeSignature(event.target.value);
+        showStageToast(`${appState.timeSignature} time`, '#06b6d4');
+    });
     const bind = (id, handler) => document.getElementById(id).addEventListener('click', handler);
     bind('btn-song-view', () => setSongView('song'));
     bind('btn-stage-view', () => setSongView('stage'));
@@ -616,6 +808,7 @@ function initSongComposer() {
         }),
     );
     initMeasureDragging();
+    initSongZoom();
     bind('song-delete', () => {
         if (songState.measures.length === 1) return;
         const deleted = songState.measures[songState.selected];
@@ -635,16 +828,10 @@ function initSongComposer() {
         songChanged();
         renderSongArrangement();
     });
-    bind('song-audition', () => {
-        songState.audition = !songState.audition;
-        resetSongTransport();
-        if (songState.audition) {
-            audioEngine.init();
-            appState.isPlaying = true;
-        }
-        updatePlayButtonUI();
-        renderSongArrangement();
-    });
+    bind('song-audition', toggleMeasureLoop);
+    bind('bar-loop', toggleMeasureLoop);
+    bind('bar-prev', () => goToSongMeasure(transportMeasureIndex() - 1));
+    bind('bar-next', () => goToSongMeasure(transportMeasureIndex() + 1));
     document.getElementById('song-jump').addEventListener('change', event => {
         const index = Math.max(
             0,
@@ -735,6 +922,8 @@ function reconcileStageCapacity(forceCompactOnRemove = false) {
                     dst.customHeights = src.customHeights;
                     dst.volume = src.volume;
                     dst.pan = src.pan;
+                    dst.effects = normalizePerformerEffects(src.effects);
+                    if (appState.effectsSlotIndex === readIdx) appState.effectsSlotIndex = writeIdx;
                     dst.pitchShift = src.pitchShift;
                     dst.muted = src.muted;
                     dst.solo = src.solo;
@@ -747,6 +936,7 @@ function reconcileStageCapacity(forceCompactOnRemove = false) {
                     src.customHeights = null;
                     src.volume = 0.85;
                     src.pan = 0.0;
+                    src.effects = [];
                     src.pitchShift = 0;
                     src.muted = false;
                     src.solo = false;

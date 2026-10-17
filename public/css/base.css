@@ -483,12 +483,17 @@ body.song-view #pedestal-hud-layer {
     background: #302619;
 }
 #song-sheet th.is-playing strong::before {
-    content: '▶ ';
-    color: #34d399;
+    content: '';
+    display: inline-block;
+    width: 0.6em;
+    height: 0.7em;
+    margin-right: 0.35em;
+    background: #34d399;
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
 }
 .song-clip {
     display: grid;
-    grid-template-columns: repeat(16, 1fr);
+    grid-template-columns: repeat(var(--bar-steps, 16), 1fr);
     gap: 2px;
     align-items: end;
     width: 208px;
@@ -503,7 +508,7 @@ body.song-view #pedestal-hud-layer {
     border-radius: 2px;
     background: #ffffff08;
 }
-.song-clip span:nth-child(4n + 1) {
+.song-clip span.is-beat {
     border-left: 1px solid #ffffff30;
 }
 .song-clip.is-muted {

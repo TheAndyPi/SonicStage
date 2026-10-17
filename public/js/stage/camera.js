@@ -16,7 +16,7 @@ function updateCameraPresetTarget(mode) {
     } else {
         // Default 'stage' — dynamically frames all unlocked concentric rings (from 6 up to 100 stages!)
         cameraTargetPos.set(0, 4.6 + scaleFactor * 2.8, 7.0 + scaleFactor * 6.1);
-        cameraLookAtTarget.set(0, 0.25, 0.5);
+        cameraLookAtTarget.copy(STAGE_ORB_CENTER);
     }
     const framing = stageFraming(camera.aspect);
     cameraTargetPos.sub(cameraLookAtTarget).multiplyScalar(framing).add(cameraLookAtTarget);
@@ -190,7 +190,7 @@ function directCinematicStep(evt) {
     if (!cinematicState.active || cinematicState.phase !== 'playing') return;
     const state = cinematicState;
     const bar = songState.measures.indexOf(evt.measure);
-    const beat = bar * 4 + Math.floor(evt.step / 4);
+    const beat = bar * getMeter().beats + Math.floor(evt.step / getMeter().stepsPerBeat);
     const subject = evt.measure.slots[state.subject];
     const subjectGone =
         state.shot?.kind === 'player' &&
@@ -221,7 +221,7 @@ function updateCinematicUI() {
         ? 100
         : state.phase === 'intro'
           ? 0
-          : ((index * 16 + appState.currentStep) / (songState.measures.length * 16)) * 100;
+          : ((index * getStepsPerBar() + appState.currentStep) / (songState.measures.length * getStepsPerBar())) * 100;
     document.getElementById('cinema-status').textContent = state.paused
         ? 'PAUSED'
         : complete
@@ -234,7 +234,7 @@ function updateCinematicUI() {
             ? 'From measure 1 · One complete performance'
             : complete
               ? `${songState.measures.length} ${songState.measures.length === 1 ? 'measure' : 'measures'} · Thank you for listening`
-              : `MEASURE ${String(index + 1).padStart(2, '0')} / ${String(songState.measures.length).padStart(2, '0')} · BEAT ${Math.floor(appState.currentStep / 4) + 1}`;
+              : `MEASURE ${String(index + 1).padStart(2, '0')} / ${String(songState.measures.length).padStart(2, '0')} · BEAT ${Math.floor(appState.currentStep / getMeter().stepsPerBeat) + 1}`;
     const pause = document.getElementById('cinema-pause');
     pause.textContent = state.paused ? 'Resume' : 'Pause';
     pause.setAttribute('aria-label', state.paused ? 'Resume showcase' : 'Pause showcase');
@@ -279,6 +279,11 @@ let pointerDownPos = { x: 0, y: 0 };
 let playerDrag = null;
 let suppressLabelClick = false;
 
+// The landing page stage is view-only: players can't be dragged, edited, or muted.
+function stagePlayersLocked() {
+    return cinematicState.active || document.body.classList.contains('home-open');
+}
+
 function pickStageSlot(clientX, clientY) {
     setStagePointer(clientX, clientY);
     raycaster.setFromCamera(mouseNDC, camera);
@@ -289,7 +294,7 @@ function pickStageSlot(clientX, clientY) {
 
 // Orbit controls stay off for the whole press so a player drag never spins the camera.
 function beginPlayerDrag(slotIdx, clientX, clientY) {
-    if (cinematicState.active || !stageState.slots[slotIdx]?.preset) return;
+    if (stagePlayersLocked() || !stageState.slots[slotIdx]?.preset) return;
     playerDrag = { from: slotIdx, x: clientX, y: clientY, active: false };
     controls.enabled = false;
 }
@@ -321,11 +326,11 @@ function finishPlayerDrag(commit) {
 }
 
 window.onStageLabelClick = function (slotIdx) {
-    if (!suppressLabelClick) focusStudioTrack(slotIdx);
+    if (!suppressLabelClick && !stagePlayersLocked()) focusStudioTrack(slotIdx);
 };
 
 function onStagePointerDown(e) {
-    if (cinematicState.active || e.target !== renderer.domElement) return;
+    if (cinematicState.active || appState.draggedEffectId || e.target !== renderer.domElement) return;
     pointerDownPos.x = e.clientX;
     pointerDownPos.y = e.clientY;
     if (e.button === 0) {
@@ -355,7 +360,10 @@ function onStagePointerMove(e) {
         }
         return;
     }
-    if (appState.draggedPresetId) {
+    if (appState.draggedEffectId) {
+        // Effect dragging owns its pointer listener and arrangement auto-scroll.
+        return;
+    } else if (appState.draggedPresetId) {
         const ghost = document.getElementById('drag-ghost');
         ghost.style.left = `${e.clientX}px`;
         ghost.style.top = `${e.clientY}px`;
@@ -373,6 +381,7 @@ function onStagePointerUp(e) {
         finishPlayerDrag(true);
         if (dragged) return;
     }
+    if (stagePlayersLocked() || appState.draggedEffectId) return;
     if (e.target === renderer.domElement && !appState.draggedPresetId) {
         const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
         if (dist < 5) {

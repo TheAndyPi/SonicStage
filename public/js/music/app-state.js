@@ -100,12 +100,28 @@ const BEATBAR_SIZES = {
     xl: { wrapperMaxH: '320px', stepCellPx: '36px', rowPadPx: '8px' },
 };
 
+// Patterns always store 16 sixteenth steps; a meter only plays the first `beats * stepsPerBeat`.
+const TIME_SIGNATURES = {
+    '2/4': { beats: 2, stepsPerBeat: 4 },
+    '3/4': { beats: 3, stepsPerBeat: 4 },
+    '4/4': { beats: 4, stepsPerBeat: 4 },
+    '5/8': { beats: 5, stepsPerBeat: 2 },
+    '6/8': { beats: 6, stepsPerBeat: 2 },
+    '7/8': { beats: 7, stepsPerBeat: 2 },
+};
+
 const appState = {
     isPlaying: false,
     bpm: 112,
+    timeSignature: '4/4',
     rootKey: 0, // 0 = C, 1 = C#, ..., 11 = B
     scaleMode: 'dorian', // 'dorian', 'minor', 'major', 'harmonicMinor', 'phrygian', 'lydian', 'mixolydian'
     currentStep: 0,
+    libraryTab: 'sounds',
+    effectsCategory: 'all',
+    effectsScope: 'player',
+    effectsSlotIndex: -1,
+    draggedEffectId: null,
     selectedCategory: 'all',
     unlockedSlots: 6, // Dynamically scales across 6 -> 12 -> 24 -> 40 -> 60 -> 80 -> 100!
     timelineVisible: true,
@@ -123,6 +139,7 @@ const appState = {
         customHeights: null, // Editable 16-step visual heights per slot
         volume: 0.85, // Individual player volume (0.0 to 1.0)
         pan: 0.0, // Stereo pan (-1.0 Left to +1.0 Right)
+        effects: [],
         pitchShift: 0, // Octave/Semitone offset (-12, 0, +12)
         muted: false,
         solo: false,
@@ -133,6 +150,29 @@ const appState = {
     draggedPresetId: null,
     hoveredSlotIndex: -1,
 };
+
+function getMeter() {
+    return TIME_SIGNATURES[appState.timeSignature] || TIME_SIGNATURES['4/4'];
+}
+
+function getStepsPerBar() {
+    const meter = getMeter();
+    return meter.beats * meter.stepsPerBeat;
+}
+
+// Tempo counts quarter notes, so every meter shares the same sixteenth-step length.
+function getSecondsPerStep() {
+    return 15 / Math.max(1, Math.min(2400, appState.bpm));
+}
+
+function formatSongTime(seconds, tenths = false) {
+    const safe = Math.max(0, seconds);
+    const whole = tenths ? Math.floor(safe * 10) / 10 : Math.round(safe);
+    const minutes = Math.floor(whole / 60);
+    const rest = whole - minutes * 60;
+    const secondsText = tenths ? rest.toFixed(1).padStart(4, '0') : String(rest).padStart(2, '0');
+    return `${minutes}:${secondsText}`;
+}
 
 function cloneStepValue(val) {
     if (val === null || val === undefined) return null;

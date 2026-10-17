@@ -246,13 +246,13 @@ img.brand-mark {
         color 80ms,
         transform 80ms;
 }
-.beat-leds i.beat-light:nth-child(2) {
+.beat-leds i.beat-light:nth-child(4n + 2) {
     --beat-color: #e3b83b;
 }
-.beat-leds i.beat-light:nth-child(3) {
+.beat-leds i.beat-light:nth-child(4n + 3) {
     --beat-color: #269d90;
 }
-.beat-leds i.beat-light:nth-child(4) {
+.beat-leds i.beat-light:nth-child(4n + 4) {
     --beat-color: #8c72d5;
 }
 .beat-leds i.beat-light.is-active {
@@ -261,7 +261,7 @@ img.brand-mark {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--beat-color) 14%, transparent);
     transform: scale(1.08);
 }
-.beat-leds i.beat-light:nth-child(2).is-active {
+.beat-leds i.beat-light:nth-child(4n + 2).is-active {
     color: #342b11;
 }
 .panel-switches {
@@ -314,8 +314,8 @@ img.brand-mark {
 .output-meter {
     border-color: var(--line);
 }
-#master-db-readout {
-    color: var(--teal);
+:root[data-theme='dark'] .db-cell[data-level='warm'] strong {
+    color: var(--yellow);
 }
 /* Drawers keep their contents mounted until the slide has finished. */
 body.sounds-collapsed {
@@ -490,9 +490,38 @@ body.sounds-collapsed #library-resize-handle {
     background: var(--surface) !important;
     border-color: var(--line) !important;
 }
-.studio-token[aria-pressed='true'] {
+.studio-token.is-active {
     background: color-mix(in srgb, var(--sound-color) 12%, var(--panel)) !important;
     border-color: color-mix(in srgb, var(--sound-color) 40%, transparent) !important;
+}
+.sound-main {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: inherit;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    text-align: left;
+    cursor: inherit;
+}
+.studio-token.is-active .sound-main {
+    cursor: grab;
+}
+.studio-token {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+}
+/* Horizontal sound strips scroll sideways; a vertical swipe lifts the sound onto the stage. */
+body.immersive-mode .studio-token {
+    touch-action: pan-x;
+}
+@media (max-width: 640px) {
+    .studio-token {
+        touch-action: pan-x;
+    }
 }
 .sound-icon {
     display: grid;
@@ -541,10 +570,38 @@ body.sounds-collapsed #library-resize-handle {
     color: var(--muted);
     font-size: 12px;
 }
-.studio-token[aria-pressed='true'] .sound-add {
+.sound-stepper {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--sound-color) 22%, var(--panel));
+    cursor: default;
+}
+.sound-stepper button {
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    color: var(--ink);
+    font-size: 12px;
+    line-height: 1;
+    transition: background 0.12s;
+}
+.sound-stepper button:hover {
     background: var(--sound-color);
     color: #151519;
-    font-size: 10px;
+}
+.sound-stepper output {
+    min-width: 14px;
+    text-align: center;
+    font:
+        600 10px 'IBM Plex Mono',
+        monospace;
+    color: var(--ink);
 }
 #measure-context {
     color: var(--ink);
@@ -633,7 +690,7 @@ body.sounds-collapsed #library-resize-handle {
     border-color: var(--line) !important;
     border-radius: 4px !important;
 }
-.timeline-cell:nth-child(4n + 1) {
+.timeline-cell.is-beat-start {
     border-left-color: color-mix(in srgb, var(--ink) 25%, transparent) !important;
 }
 .timeline-cell[aria-pressed='true'] > div {
@@ -788,25 +845,14 @@ input[type='range'].hw-slider::-moz-range-thumb {
 .style-options small {
     color: var(--muted);
 }
-.style-options label:nth-child(1) input:checked + span {
+.style-options input:checked + span {
     background: var(--chip-blue);
     border-color: var(--blue);
     color: var(--ink);
 }
-.style-options label:nth-child(2) input:checked + span {
-    background: var(--chip-green);
-    border-color: var(--green);
-    color: var(--ink);
-}
-.style-options label:nth-child(3) input:checked + span {
-    background: var(--chip-pink);
-    border-color: var(--pink);
-    color: var(--ink);
-}
-.style-options label:nth-child(4) input:checked + span {
+.style-options label:first-child input:checked + span {
     background: color-mix(in srgb, var(--purple) 15%, var(--panel));
     border-color: var(--purple);
-    color: var(--ink);
 }
 .generator-fields select,
 .track-options select {
@@ -852,6 +898,17 @@ kbd {
 .stage-edit-icon {
     color: var(--muted);
 }
+.pedestal-hud > .stage-track-chip {
+    background: transparent !important;
+    backdrop-filter: none;
+}
+.pedestal-hud > .stage-slot-target {
+    background: var(--panel) !important;
+    border-color: color-mix(in srgb, var(--muted) 45%, transparent);
+    color: var(--muted);
+    border-radius: 9px !important;
+    box-shadow: var(--shadow) !important;
+}
 .stage-track-chip {
     display: flex;
     align-items: center;
@@ -894,14 +951,67 @@ body.is-dragging-player * {
     cursor: grab;
     touch-action: none;
 }
-#song-sheet thead th.is-drag-source {
-    opacity: 0.45;
+#song-sheet .song-clip {
+    touch-action: pan-y;
 }
-#song-sheet thead th.drop-before {
-    box-shadow: inset 3px 0 var(--accent);
+/* While a measure is dragged its column floats above the sheet but below the sticky labels. */
+body.is-dragging-measure #song-sheet [data-measure-index] {
+    transition: transform 160ms ease;
 }
-#song-sheet thead th.drop-after {
-    box-shadow: inset -3px 0 var(--accent);
+body.is-dragging-measure #song-sheet tbody .instrument-label {
+    z-index: 2;
+}
+body.is-dragging-measure #song-sheet thead th {
+    z-index: 3;
+}
+body.is-dragging-measure #song-sheet thead .instrument-label {
+    z-index: 5;
+}
+body.is-dragging-measure #song-sheet td.is-drag-column {
+    position: relative;
+    z-index: 1;
+    transition: none;
+    background: var(--surface);
+    box-shadow:
+        inset 2px 0 var(--accent),
+        inset -2px 0 var(--accent),
+        0 0 24px #0008;
+}
+body.is-dragging-measure #song-sheet thead th.is-drag-column {
+    z-index: 4;
+    transition: none;
+    box-shadow:
+        inset 2px 0 var(--accent),
+        inset -2px 0 var(--accent),
+        inset 0 2px var(--accent),
+        0 0 24px #0008;
+}
+#song-sheet .measure-play {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 20px;
+    height: 20px;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    background: var(--panel);
+    cursor: pointer;
+    opacity: 0.7;
+}
+#song-sheet .measure-play::before {
+    content: '';
+    position: absolute;
+    inset: 5px 5px 5px 7px;
+    background: var(--ink);
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+#song-sheet .measure-play:hover,
+#song-sheet .measure-play:focus-visible {
+    opacity: 1;
+    border-color: var(--accent);
+}
+#song-sheet .measure-play:hover::before {
+    background: var(--accent);
 }
 body.is-dragging-measure,
 body.is-dragging-measure * {
@@ -1095,6 +1205,20 @@ body.is-dragging-measure * {
 #cinema-progress-fill {
     background: var(--purple);
 }
+.inline-icon {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    flex-shrink: 0;
+    vertical-align: -0.12em;
+}
+#btn-cinematic .desktop-label {
+    margin-left: 5px;
+}
+.transport-controls #transport-restart svg {
+    width: 18px;
+    height: 18px;
+}
 #immersive-heading {
     display: none;
 }
@@ -1157,7 +1281,6 @@ body.immersive-mode .transport-controls button {
     height: 39px;
     border-radius: 13px;
 }
-body.immersive-mode #transport-restart,
 body.immersive-mode #btn-record-toggle,
 body.immersive-mode .harmony-control,
 body.immersive-mode .workspace-switch,
@@ -1167,11 +1290,57 @@ body.immersive-mode .output-meter,
 body.immersive-mode #bpm-slider {
     display: none !important;
 }
+body.immersive-mode #transport-restart svg {
+    width: 17px;
+    height: 17px;
+}
 body.immersive-mode #transport-position {
     order: 1;
     border-right: 0;
     padding-right: 0;
     gap: 7px;
+}
+.bar-nav-button {
+    display: none;
+}
+body.immersive-mode .bar-nav-button {
+    order: 1;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 30px;
+    height: 34px;
+    padding: 0;
+    border: 0;
+    border-radius: 11px;
+    background: transparent;
+    color: var(--ink);
+}
+body.immersive-mode .bar-nav-button svg {
+    width: 17px;
+    height: 17px;
+}
+body.immersive-mode .bar-nav-button:hover:not(:disabled) {
+    background: var(--surface-strong);
+}
+body.immersive-mode .bar-nav-button:disabled {
+    color: var(--muted);
+    opacity: 0.4;
+    cursor: default;
+}
+body.immersive-mode #bar-prev {
+    margin-right: -10px;
+}
+body.immersive-mode #bar-next {
+    margin-left: -10px;
+}
+body.immersive-mode #bar-loop {
+    width: 36px;
+    color: var(--muted);
+}
+body.immersive-mode #bar-loop[aria-pressed='true'] {
+    background: var(--chip-blue);
+    color: var(--ink);
 }
 body.immersive-mode .tempo-control {
     order: 2;
@@ -1253,7 +1422,9 @@ body.immersive-mode #token-palette {
     gap: 9px;
     overflow-x: auto;
     overflow-y: hidden;
-    padding-bottom: 5px;
+    /* Room for the hover lift and focus ring, which this scroller would otherwise clip. */
+    padding: 6px 3px 5px;
+    margin: 0 -3px;
     min-height: 54px;
 }
 body.immersive-mode .studio-token {
@@ -1280,7 +1451,8 @@ body.immersive-mode .sound-icon svg {
 body.immersive-mode .sound-info strong {
     font-size: 11px;
 }
-body.immersive-mode .sound-add {
+body.immersive-mode .sound-add,
+body.immersive-mode .sound-stepper button {
     width: 16px;
     height: 16px;
     font-size: 10px;
@@ -1555,11 +1727,20 @@ body.cinematic-mode #canvas-container {
         height: auto;
         display: grid;
         grid-template-columns: auto 1fr;
-        gap: 3px 4px;
+        gap: 3px 6px;
     }
     #transport-position .beat-leds {
         grid-column: 1/3;
+        grid-row: 2;
         gap: 5px;
+    }
+    #transport-measure,
+    #transport-clock {
+        grid-row: 1;
+    }
+    #transport-measure {
+        min-width: 0;
+        font-size: 10px;
     }
     .beat-leds i.beat-light {
         width: 11px !important;
@@ -1616,7 +1797,8 @@ body.cinematic-mode #canvas-container {
     .sound-info small {
         font-size: 7px;
     }
-    .sound-add {
+    .sound-add,
+    .sound-stepper button {
         width: 15px;
         height: 15px;
         font-size: 10px;
@@ -1686,16 +1868,24 @@ body.cinematic-mode #canvas-container {
         border-radius: 11px;
     }
     body.immersive-mode #transport-position {
-        display: grid;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        flex-shrink: 0;
         margin: 0;
         padding: 0;
-        min-width: 55px;
+        min-width: 0;
         height: auto;
-        gap: 3px;
+        gap: 4px;
+    }
+    body.immersive-mode #transport-clock {
+        display: none;
     }
     body.immersive-mode #transport-measure {
         font-size: 10px;
         min-width: 34px;
+        text-align: center;
+        white-space: nowrap;
     }
     body.immersive-mode #transport-position .control-label {
         font-size: 7px;
@@ -1710,16 +1900,18 @@ body.cinematic-mode #canvas-container {
     body.immersive-mode .panel-switches {
         gap: 3px;
     }
+    /* Icon-only on phones; the visible label stays as the accessible name. */
     body.immersive-mode .panel-switches button {
+        width: 37px;
         min-height: 37px;
-        padding: 6px 9px;
-        gap: 4px;
-        font-size: 10px;
+        padding: 0;
+        gap: 0;
+        font-size: 0;
         border-radius: 11px;
     }
     body.immersive-mode .panel-switches svg {
-        width: 13px;
-        height: 13px;
+        width: 17px;
+        height: 17px;
     }
     body.immersive-mode #canvas-container,
     body.immersive-mode #pedestal-hud-layer {
@@ -1802,18 +1994,39 @@ body.cinematic-mode #canvas-container {
         margin-left: auto;
     }
     body.immersive-mode #stage-toolbar {
-        top: calc(var(--header-height) + 105px);
-        right: 17px;
+        top: calc(var(--header-height) + 12px);
+        right: 12px;
+    }
+    body.immersive-mode .stage-tools {
+        gap: 4px;
     }
     body.immersive-mode #immersive-heading {
-        top: calc(var(--header-height) + 20px);
-        left: 20px;
-        right: 20px;
+        top: calc(var(--header-height) + 12px);
+        left: 14px;
+        right: 14px;
+    }
+    body.immersive-mode .bar-nav-button {
+        width: 26px;
+        height: 37px;
+        border-radius: 10px;
+    }
+    body.immersive-mode #bar-loop {
+        width: 32px;
+    }
+    body.immersive-mode .bar-nav-button svg {
+        width: 15px;
+        height: 15px;
+    }
+    body.immersive-mode #bar-prev {
+        margin-right: -7px;
+    }
+    body.immersive-mode #bar-next {
+        margin-left: -7px;
     }
     #immersive-heading h1 {
-        font-size: 25px;
-        letter-spacing: -1px;
-        margin-top: 7px;
+        font-size: 20px;
+        letter-spacing: -0.8px;
+        margin: 3px 0 2px;
     }
     #immersive-heading p {
         font-size: 10px;
@@ -1828,6 +2041,25 @@ body.cinematic-mode #canvas-container {
         gap: 2px 6px;
         padding-left: 10px;
         padding-right: 10px;
+    }
+    body.immersive-mode #stage-toolbar {
+        right: 10px;
+    }
+    body.immersive-mode #immersive-heading {
+        left: 10px;
+        right: 10px;
+    }
+    #immersive-heading h1 {
+        font-size: 17px;
+    }
+    .band-eyebrow {
+        font-size: 6px;
+        letter-spacing: 0.08em;
+    }
+    .camera-switch button,
+    .stage-tools > .quiet-button {
+        padding: 4px 6px;
+        font-size: 8px;
     }
     .project-bar .wordmark {
         font-size: 15px;
@@ -1852,14 +2084,16 @@ body.cinematic-mode #canvas-container {
         padding: 7px;
     }
     body.immersive-mode .transport-controls button {
-        width: 31px;
+        width: 29px;
     }
     body.immersive-mode .panel-switches button {
-        padding: 6px 7px;
-        font-size: 9px;
+        width: 31px;
     }
-    body.immersive-mode .panel-switches svg {
-        display: none;
+    body.immersive-mode .bar-nav-button {
+        width: 24px;
+    }
+    body.immersive-mode #bar-loop {
+        width: 29px;
     }
     .start-version {
         display: none;

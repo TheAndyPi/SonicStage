@@ -3,47 +3,47 @@
  ***********************************************************************/
 const clock = new THREE.Clock();
 
-const METER_COLORS = ['#ff7959', '#f4ca54', '#69bf91', '#58b6db', '#9e85e3', '#e98fbb'];
-function drawMiniFFTSpectrum() {
-    const canvas = document.getElementById('fft-canvas');
-    if (!canvas) return;
-    const ctx2d = canvas.getContext('2d');
-    ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+function sampleStageAnalyser() {
+    if (audioEngine.analyser && appState.isPlaying) audioEngine.analyser.getByteFrequencyData(audioEngine.fftData);
+}
 
-    if (!audioEngine.analyser || !appState.isPlaying) {
-        for (let i = 0; i < 12; i++) {
-            ctx2d.fillStyle = METER_COLORS[i % METER_COLORS.length] + '66';
-            ctx2d.fillRect(i * 5, canvas.height - 3, 3.5, 3);
-        }
+// Shown only after a sustained drop, and hidden again once the frame rate has clearly recovered.
+const fpsMonitor = { windowStart: 0, frames: 0, slowWindows: 0, fastWindows: 0, visible: false, resumed: true };
+// Background tabs throttle rAF; the gap across a tab switch is not a rendering slowdown.
+document.addEventListener('visibilitychange', () => {
+    fpsMonitor.resumed = true;
+});
+function trackStageFrameRate() {
+    const now = performance.now();
+    if (document.hidden || songState.view !== 'stage' || fpsMonitor.resumed) {
+        fpsMonitor.resumed = document.hidden;
+        fpsMonitor.windowStart = now;
+        fpsMonitor.frames = 0;
         return;
     }
+    fpsMonitor.frames++;
+    const span = now - fpsMonitor.windowStart;
+    if (span < 500) return;
+    const fps = (fpsMonitor.frames * 1000) / span;
+    fpsMonitor.windowStart = now;
+    fpsMonitor.frames = 0;
+    fpsMonitor.slowWindows = fps < 40 ? fpsMonitor.slowWindows + 1 : 0;
+    fpsMonitor.fastWindows = fps >= 50 ? fpsMonitor.fastWindows + 1 : 0;
+    if (fpsMonitor.slowWindows >= 2) fpsMonitor.visible = true;
+    else if (fpsMonitor.fastWindows >= 4) fpsMonitor.visible = false;
 
-    audioEngine.analyser.getByteFrequencyData(audioEngine.fftData);
-    audioEngine.analyser.getByteTimeDomainData(audioEngine.timeDomainData);
-
-    for (let i = 0; i < 12; i++) {
-        const v = audioEngine.fftData[i * 2] / 255;
-        const barH = Math.max(2, v * canvas.height);
-        ctx2d.fillStyle = METER_COLORS[i % METER_COLORS.length];
-        ctx2d.fillRect(i * 5, canvas.height - barH, 3.5, barH);
-    }
-
-    // Update Peak dB Meter Readout
-    const dbEl = document.getElementById('master-db-readout');
-    if (dbEl) {
-        let peak = 0;
-        for (let i = 0; i < audioEngine.timeDomainData.length; i++) {
-            const amp = Math.abs((audioEngine.timeDomainData[i] - 128) / 128);
-            if (amp > peak) peak = amp;
-        }
-        const db = peak < 0.001 ? -60.0 : Math.min(0.0, 20 * Math.log10(peak));
-        dbEl.textContent = db <= -59 ? '-∞ dB' : `${db.toFixed(1)}dB`;
-        dbEl.className = `text-[9px] font-mono font-bold ${db > -1.5 ? 'text-rose-400' : db > -6 ? 'text-amber-300' : 'text-emerald-400'}`;
-    }
+    const el = document.getElementById('stage-fps');
+    el.hidden = !fpsMonitor.visible;
+    if (!fpsMonitor.visible) return;
+    el.textContent = `${Math.round(fps)} FPS`;
+    const bounds = document.getElementById('pedestal-hud-layer').getBoundingClientRect();
+    el.style.left = `${bounds.right - 10}px`;
+    el.style.top = `${bounds.bottom - 10}px`;
 }
 
 function animateLoop() {
     requestAnimationFrame(animateLoop);
+    trackStageFrameRate();
 
     const dt = Math.min(clock.getDelta(), 0.1);
     const elapsed = clock.getElapsedTime();
@@ -76,6 +76,8 @@ function animateLoop() {
                 !cinematicState.active &&
                 evt.measure.slots !== appState.slots &&
                 !document.body.classList.contains('is-dragging-measure') &&
+                !appState.draggedEffectId &&
+                !document.activeElement?.closest('.effects-library') &&
                 document.activeElement?.id !== 'song-measure-label'
             ) {
                 const index = songState.measures.indexOf(evt.measure);
@@ -107,7 +109,8 @@ function animateLoop() {
         }
     }
 
-    drawMiniFFTSpectrum();
+    sampleStageAnalyser();
+    drawMasterScope(dt, elapsed, reducedStageMotion);
 
     // 2. Audio-Reactive Radial Floor EQ Bars + Central Harmonic Gyroscope Core
     let avgAudioEnergy = 0;
@@ -244,6 +247,8 @@ function animateLoop() {
             _tempVec3.set(hoverScale, hoverScale, hoverScale);
             ped.performerGroup.scale.lerp(_tempVec3, reducedStageMotion ? 1 : 1 - Math.exp(-dt * 18));
         }
+
+        updatePerformerEffectVisuals(ped, slot, elapsed, reducedStageMotion);
 
         // Shockwave ring decay
         if (reducedStageMotion) ped.waveMesh.material.opacity = 0;

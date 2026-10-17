@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+    <meta charset="utf-8" /><title>Performer effects audio verification</title>
+    <body>
+        <h1>Performer effects · Web Audio verification</h1>
+        <pre id="results">Rendering…</pre>
+        <script src="/js/music/effects.js"></script>
+        <script src="/js/music/app-state.js"></script>
+        <script src="/js/music/audio-engine.js"></script>
+        <script>
+            // Serve a copy from public/ to run this in any browser with OfflineAudioContext.
+            const results = document.getElementById('results');
+            async function render(effects) {
+                const ctx = new OfflineAudioContext(2, 38400, 24000);
+                const engine = new StudioAudioEngine();
+                engine.ctx = ctx;
+                const buffer = ctx.createBuffer(1, 38400, 24000);
+                const samples = buffer.getChannelData(0);
+                for (let i = 0; i < 10800; i++) {
+                    const t = i / 24000;
+                    const envelope = Math.min(1, t * 80) * Math.min(1, (0.45 - t) * 80);
+                    samples[i] =
+                        envelope *
+                        (0.22 * Math.sin(t * 110 * Math.PI * 2) +
+                            0.12 * Math.sin(t * 440 * Math.PI * 2) +
+                            0.06 * Math.sin(t * 2700 * Math.PI * 2));
+                }
+                const source = ctx.createBufferSource();
+                source.buffer = buffer;
+                const rack = new PerformerEffectRack(engine, effects, 0);
+                source.connect(rack.input);
+                rack.output.connect(ctx.destination);
+                source.start();
+                const rendered = await ctx.startRendering();
+                rack.dispose();
+                return [rendered.getChannelData(0), rendered.getChannelData(1)];
+            }
+            (async () => {
+                const dry = await render([]);
+                const reports = [];
+                for (const definition of PERFORMER_EFFECTS) {
+                    const wet = await render([{ id: definition.id, amount: 0.8, enabled: true }]);
+                    const zero = await render([{ id: definition.id, amount: 0, enabled: true }]);
+                    let energy = 0,
+                        difference = 0,
+                        zeroError = 0,
+                        peak = 0;
+                    for (let channel = 0; channel < 2; channel++) {
+                        for (let i = 0; i < wet[channel].length; i++) {
+                            const value = wet[channel][i];
+                            if (!Number.isFinite(value)) throw Error(definition.name + ': nonfinite sample');
+                            peak = Math.max(peak, Math.abs(value));
+                            energy += value * value;
+                            difference += (value - dry[channel][i]) ** 2;
+                            zeroError += (zero[channel][i] - dry[channel][i]) ** 2;
+                        }
+                    }
+                    if (energy < 0.001 || difference < 0.001 || peak > 2 || zeroError > 0.00001)
+                        throw Error(
+                            `${definition.name}: energy=${energy}, difference=${difference}, peak=${peak}, zeroError=${zeroError}`,
+                        );
+                    reports.push(
+                        `PASS ${definition.name}: changes audio, amount 0 restores dry, finite output (peak ${peak.toFixed(3)})`,
+                    );
+                    results.textContent = reports.join('\n');
+                }
+                for (let group = 0; group < 5; group++) {
+                    const effects = PERFORMER_EFFECTS.slice(group * 4, group * 4 + 4).map(effect => ({
+                        id: effect.id,
+                        amount: 0.8,
+                        enabled: true,
+                    }));
+                    const audio = await render(effects);
+                    if (!audio.every(channel => channel.every(Number.isFinite)))
+                        throw Error('Nonfinite stacked output');
+                }
+                results.textContent +=
+                    '\nPASS Five four-effect chains render finite output.\nPASS All 21 effects verified in OfflineAudioContext.';
+                document.title = 'PASS · Performer effects audio verification';
+            })().catch(error => {
+                results.textContent += '\nFAIL ' + error.stack;
+                document.title = 'FAIL · Performer effects audio verification';
+            });
+        </script>
+    </body>
+</html>

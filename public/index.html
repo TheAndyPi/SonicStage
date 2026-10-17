@@ -26,6 +26,7 @@
         <link rel="stylesheet" href="css/base.css" />
         <link rel="stylesheet" href="css/workspace.css" />
         <link rel="stylesheet" href="css/theme.css" />
+        <link rel="stylesheet" href="css/effects.css" />
     </head>
     <body class="home-open relative w-screen h-screen overflow-hidden select-none">
         <!-- 1. THREE.JS GRAND AMPHITHEATER CANVAS -->
@@ -33,6 +34,7 @@
 
         <!-- 2. FLOATING PEDESTAL LABELS OVERLAY -->
         <div id="pedestal-hud-layer" class="absolute inset-0 pointer-events-none z-10 overflow-hidden"></div>
+        <div id="stage-fps" aria-hidden="true" hidden></div>
 
         <!-- 3. DRAG GHOST TOKEN -->
         <div
@@ -70,7 +72,17 @@
                         Replay
                     </button>
                     <button id="cinema-exit" class="cinema-control" aria-label="Exit showcase (Escape)">
-                        Exit <span aria-hidden="true">↗</span>
+                        Exit
+                        <svg
+                            class="inline-icon"
+                            viewBox="0 0 16 16"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.6"
+                            aria-hidden="true"
+                        >
+                            <path d="M5 11 11 5M6 5h5v5" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
                     </button>
                 </div>
             </div>
@@ -126,8 +138,23 @@
                     ><button id="project-save" class="quiet-button" title="Save song file (⌘S)">
                         Save <span class="desktop-label">song</span>
                     </button>
+                    <button id="btn-cinematic" class="quiet-button" title="Watch song with directed cameras">
+                        <svg class="inline-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                            <path d="M4.5 3v10l8.5-5Z" /></svg
+                        ><span class="desktop-label">Showcase</span>
+                    </button>
                     <button id="project-generate" class="accent-button">
-                        <span aria-hidden="true">✳</span> Generate
+                        <svg
+                            class="inline-icon"
+                            viewBox="0 0 16 16"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.6"
+                            aria-hidden="true"
+                        >
+                            <path d="M8 2.5v11M2.5 8h11M4.1 4.1l7.8 7.8m0-7.8-7.8 7.8" stroke-linecap="round" />
+                        </svg>
+                        Generate
                     </button>
                 </div>
             </div>
@@ -139,7 +166,10 @@
                         aria-label="Play from beginning"
                         title="Play from beginning (Enter)"
                     >
-                        Ⅰ◀
+                        <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <rect x="4" y="4.5" width="2" height="11" rx="0.8" />
+                            <path d="M16 4.8v10.4a.6.6 0 0 1-.9.5L7.4 10.5a.6.6 0 0 1 0-1l7.7-5.2a.6.6 0 0 1 .9.5Z" />
+                        </svg>
                     </button>
                     <button
                         id="transport-stop"
@@ -161,12 +191,54 @@
                         <span id="record-dot"></span><span id="record-status-text" class="sr-only">REC</span>
                     </button>
                 </div>
+                <button
+                    id="bar-prev"
+                    class="bar-nav-button"
+                    type="button"
+                    aria-label="Previous measure"
+                    title="Previous measure ( [ )"
+                >
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                        <path d="m12 5-5 5 5 5" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </button>
                 <div id="transport-position" role="group" aria-label="Playback position">
                     <span class="control-label">BAR</span><strong id="transport-measure">1 / 1</strong
                     ><span class="beat-leds"
                         ><i id="beat-led-0"></i><i id="beat-led-1"></i><i id="beat-led-2"></i><i id="beat-led-3"></i
+                        ><i id="beat-led-4" hidden></i><i id="beat-led-5" hidden></i><i id="beat-led-6" hidden></i
                     ></span>
+                    <span id="transport-clock" title="Playback time / song length"
+                        ><strong id="transport-time">0:00.0</strong><span id="transport-duration">/ 0:00</span></span
+                    >
                 </div>
+                <button
+                    id="bar-next"
+                    class="bar-nav-button"
+                    type="button"
+                    aria-label="Next measure"
+                    title="Next measure ( ] )"
+                >
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                        <path d="m8 5 5 5-5 5" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </button>
+                <button
+                    id="bar-loop"
+                    class="bar-nav-button"
+                    type="button"
+                    aria-pressed="false"
+                    aria-label="Loop this measure"
+                    title="Loop this measure (L)"
+                >
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+                        <path
+                            d="M4 9.5V8a3 3 0 0 1 3-3h8m-2.5-2.5L15 5l-2.5 2.5M16 10.5V12a3 3 0 0 1-3 3H5m2.5 2.5L5 15l2.5-2.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+                    </svg>
+                </button>
                 <div class="tempo-control">
                     <label for="bpm-number-input" class="control-label">TEMPO</label
                     ><input
@@ -177,6 +249,13 @@
                         value="112"
                         aria-label="Tempo in BPM"
                     /><span class="control-label">BPM</span
+                    ><select id="meter-select" aria-label="Time signature" title="Time signature">
+                        <option value="2/4">2/4</option>
+                        <option value="3/4">3/4</option>
+                        <option value="4/4" selected>4/4</option>
+                        <option value="5/8">5/8</option>
+                        <option value="6/8">6/8</option>
+                        <option value="7/8">7/8</option></select
                     ><input
                         id="bpm-slider"
                         class="hw-slider"
@@ -218,15 +297,57 @@
                 <button id="btn-pro-fx" class="quiet-button" aria-expanded="false" aria-controls="pro-fx-drawer">
                     FX <span class="desktop-label">rack</span>
                 </button>
-                <button id="btn-cinematic" class="quiet-button" title="Watch song with directed cameras">
-                    ▶ <span class="desktop-label">Showcase</span>
-                </button>
                 <div class="output-meter">
-                    <canvas id="fft-canvas" width="52" height="22"></canvas><span id="master-db-readout">−∞ dB</span>
+                    <div class="scope-screen">
+                        <canvas id="fft-canvas" aria-hidden="true"></canvas
+                        ><button id="scope-mode" class="scope-hit" type="button" aria-controls="scope-window"></button
+                        ><button id="scope-popout" class="scope-popout" type="button" aria-controls="scope-window">
+                            <svg
+                                viewBox="0 0 12 12"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="1.3"
+                                aria-hidden="true"
+                            >
+                                <path
+                                    d="M7 1.5h3.5V5M10.5 1.5 6.5 5.5M5 2.5H2.5a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V7"
+                                />
+                            </svg>
+                        </button>
+                    </div>
+                    <span id="master-db-readout" class="db-readout" title="Output level and held peak"
+                        ><span class="db-cell" data-level="idle"
+                            ><strong id="master-db-now">−∞</strong><small>dB</small></span
+                        ><span class="db-cell" data-level="idle"
+                            ><strong id="master-db-value">−∞</strong><small>peak</small></span
+                        ></span
+                    >
                 </div>
             </div>
             <span id="subtitle-key-info" hidden></span>
         </header>
+        <div id="scope-window" class="scope-window" hidden tabindex="-1" role="dialog" aria-label="Output visualizer">
+            <div class="scope-window-bar">
+                <span>Output</span>
+                <div class="scope-window-modes" role="group" aria-label="Visualizer view">
+                    <button type="button" data-scope-mode="0">Spectrum</button
+                    ><button type="button" data-scope-mode="1">Spectrogram</button
+                    ><button type="button" data-scope-mode="2">Oscilloscope</button
+                    ><button type="button" data-scope-mode="3">Bars</button>
+                </div>
+                <button id="scope-window-close" type="button" aria-label="Close visualizer">×</button>
+            </div>
+            <button id="scope-window-hit" class="scope-screen" type="button">
+                <canvas id="scope-window-canvas" aria-hidden="true"></canvas>
+            </button>
+            <span id="scope-window-readout" class="db-readout"
+                ><span class="db-cell" data-level="idle"
+                    ><strong id="scope-window-now">−∞</strong><small>dB</small></span
+                ><span class="db-cell" data-level="idle"
+                    ><strong id="scope-window-db">−∞</strong><small>peak</small></span
+                ></span
+            >
+        </div>
         <div id="stage-toolbar">
             <div class="stage-heading">
                 <span class="live-dot"></span><span>LIVE STAGE</span
@@ -439,7 +560,10 @@
                         <h2 class="song-title">
                             Song arrangement <span id="song-summary" class="text-xs text-slate-400 font-mono"></span>
                         </h2>
-                        <p class="song-hint">4/4 · Select a bar to edit. Drag a bar to reorder.</p>
+                        <p class="song-hint">
+                            <span id="song-meter-hint">4/4</span> · Drop effects on a clip or bar heading. Drag a bar to
+                            reorder.
+                        </p>
                     </div>
                     <div class="song-actions">
                         <button
@@ -447,10 +571,23 @@
                             class="song-button primary"
                             title="Watch the full song on the 3D stage"
                         >
-                            ▶ Showcase
+                            <svg class="inline-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                <path d="M4.5 3v10l8.5-5Z" />
+                            </svg>
+                            Showcase
                         </button>
-                        <button id="song-play-start" class="song-button primary">▶ From start</button>
-                        <button id="song-play-selected" class="song-button">▶ Play bar</button>
+                        <button id="song-play-start" class="song-button primary">
+                            <svg class="inline-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                <path d="M4.5 3v10l8.5-5Z" />
+                            </svg>
+                            From start
+                        </button>
+                        <button id="song-play-selected" class="song-button">
+                            <svg class="inline-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                <path d="M4.5 3v10l8.5-5Z" />
+                            </svg>
+                            Play bar
+                        </button>
                         <button id="song-stop" class="song-button">■ Stop</button>
                         <button id="song-loop" class="song-button" aria-pressed="true">Loop song</button>
                         <button
@@ -465,6 +602,13 @@
                 </div>
                 <div class="song-toolbar">
                     <div class="song-actions">
+                        <button
+                            id="song-bar-effects"
+                            class="song-button"
+                            onclick="openArrangementEffects(songState.selected)"
+                        >
+                            Bar effects
+                        </button>
                         <button id="song-add" class="song-button primary">+ Add bar</button>
                         <button id="song-duplicate" class="song-button">Duplicate</button>
                         <label class="song-hint m-0"
@@ -499,7 +643,15 @@
                 </div>
                 <div class="song-footer">
                     <span id="song-position" class="song-hint m-0" role="status">Ready</span>
-                    <label class="song-hint m-0 ml-auto"
+                    <div class="song-zoom ml-auto" role="group" aria-label="Arrangement zoom">
+                        <span class="song-hint m-0">Zoom</span>
+                        <button id="song-zoom-out" class="song-button" aria-label="Zoom out" title="Zoom out">−</button>
+                        <button id="song-zoom-fit" class="song-button" title="Fit the arrangement to the window">
+                            100%
+                        </button>
+                        <button id="song-zoom-in" class="song-button" aria-label="Zoom in" title="Zoom in">+</button>
+                    </div>
+                    <label class="song-hint m-0"
                         >Go to measure
                         <input
                             id="song-jump"
@@ -745,7 +897,12 @@
                         ><span><strong>Open</strong><small>SonicStage file</small></span>
                     </button>
                     <button id="start-generate" class="start-action">
-                        <span class="action-symbol" aria-hidden="true">✳</span
+                        <span class="action-symbol" aria-hidden="true"
+                            ><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path
+                                    d="M8 2.5v11M2.5 8h11M4.1 4.1l7.8 7.8m0-7.8-7.8 7.8"
+                                    stroke-linecap="round"
+                                /></svg></span
                         ><span><strong>Generate</strong><small>A finished arrangement</small></span>
                     </button>
                 </div>
@@ -772,31 +929,19 @@
                 </div>
                 <p class="dialog-copy">A complete arrangement, ready to make your own.</p>
                 <div class="field-label" id="generator-style-label">Style</div>
-                <div class="style-options" role="radiogroup" aria-labelledby="generator-style-label">
-                    <label
-                        ><input type="radio" name="style" value="house" checked /><span
-                            >House<small>Four on the floor</small></span
-                        ></label
-                    ><label
-                        ><input type="radio" name="style" value="lofi" /><span
-                            >Lo-fi<small>Loose & mellow</small></span
-                        ></label
-                    ><label
-                        ><input type="radio" name="style" value="funk" /><span
-                            >Funk<small>Pocket & syncopation</small></span
-                        ></label
-                    ><label
-                        ><input type="radio" name="style" value="cinematic" /><span
-                            >Cinematic<small>Space & tension</small></span
-                        ></label
-                    >
-                </div>
+                <div
+                    class="style-options"
+                    id="generator-styles"
+                    role="radiogroup"
+                    aria-labelledby="generator-style-label"
+                ></div>
                 <div class="generator-fields">
                     <label
                         >Length<select id="generator-bars">
-                            <option value="8">8 bars</option>
-                            <option value="16" selected>16 bars</option>
-                            <option value="32">32 bars</option>
+                            <option value="8">8 bars · sketch</option>
+                            <option value="16" selected>16 bars · short song</option>
+                            <option value="32">32 bars · full song</option>
+                            <option value="64">64 bars · extended</option>
                         </select></label
                     ><label
                         >Energy<select id="generator-energy">
@@ -808,7 +953,7 @@
                 </div>
                 <div class="generator-note">Composed locally · No account needed</div>
                 <p id="generator-error" role="alert" hidden></p>
-                <button type="submit" id="generator-submit" class="accent-button">✳ Generate song</button>
+                <button type="submit" id="generator-submit" class="accent-button">Generate song</button>
             </form>
         </dialog>
         <dialog id="shortcuts-dialog" class="studio-dialog">
@@ -828,6 +973,14 @@
                 <div>
                     <dt>Stop</dt>
                     <dd><kbd>0</kbd></dd>
+                </div>
+                <div>
+                    <dt>Previous / next measure</dt>
+                    <dd><kbd>[ / ]</kbd></dd>
+                </div>
+                <div>
+                    <dt>Loop this measure</dt>
+                    <dd><kbd>L</kbd></dd>
                 </div>
                 <div>
                     <dt>Undo / redo</dt>
@@ -877,6 +1030,7 @@
                 ><button id="track-solo" class="song-button" aria-pressed="false">Solo</button>
             </div>
             <div class="track-pattern-actions">
+                <button id="track-effects" class="quiet-button">Effects</button>
                 <button id="track-shuffle" class="quiet-button">Shuffle pattern</button
                 ><button id="track-reset" class="quiet-button">Reset pattern</button
                 ><button id="track-remove" class="quiet-button">Remove track</button>
@@ -885,6 +1039,7 @@
 
         <!-- App scripts. Classic scripts share one global scope, so order matters. -->
         <script src="js/music/presets.js"></script>
+        <script src="js/music/effects.js"></script>
         <script src="js/music/app-state.js"></script>
         <script src="js/music/song.js"></script>
         <script src="js/music/audio-engine.js"></script>
@@ -894,10 +1049,14 @@
         <script src="js/stage/labels.js"></script>
         <script src="js/ui/tracks.js"></script>
         <script src="js/ui/sequencer.js"></script>
+        <script src="js/ui/master-scope.js"></script>
+        <script src="js/stage/effects.js"></script>
         <script src="js/stage/render-loop.js"></script>
         <script src="js/main.js"></script>
         <script src="js/music/song-generator.js"></script>
         <script src="js/ui/workspace.js"></script>
         <script src="js/ui/views.js"></script>
+        <script src="js/ui/effects.js"></script>
+        <script src="js/ui/arrangement-effects.js"></script>
     </body>
 </html>

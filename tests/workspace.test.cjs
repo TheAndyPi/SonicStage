@@ -102,10 +102,12 @@ assert.ok(
 assert.ok(paints >= 150);
 
 const actions = [];
+const bodyClasses = new Set();
 let dialogOpen = false;
 let startPage = false;
 const workspace = vm.createContext({
     document: {
+        body: { classList: { add: name => bodyClasses.add(name), remove: name => bodyClasses.delete(name) } },
         getElementById: id => ({ click: () => actions.push(id), classList: { contains: () => !startPage } }),
         querySelector: () => dialogOpen,
     },
@@ -175,6 +177,15 @@ assert.equal(actions.pop(), 'redo');
 assert.equal(key('z', { metaKey: true, editable: true }).prevented, false);
 assert.equal(key(' ', { repeat: true }).prevented, true);
 assert.equal(actions.length, 0);
+key(' ', { focus: 'beat' });
+assert.equal(actions.pop(), 'btn-play-toggle');
+assert.ok(bodyClasses.has('transport-shortcut'), 'transport hides the incidental focus ring');
+key(' ', { repeat: true });
+assert.ok(bodyClasses.has('transport-shortcut'), 'holding Space keeps the focus ring hidden');
+key('Tab');
+assert.ok(!bodyClasses.has('transport-shortcut'), 'Tab restores visible keyboard focus');
+key(' ', { editable: true });
+assert.ok(!bodyClasses.has('transport-shortcut'), 'typing a space leaves text field focus alone');
 for (const options of [{ altKey: true }, { isComposing: true }, { defaultPrevented: true }])
     assert.equal(key(' ', options).prevented, false);
 dialogOpen = true;
