@@ -4,6 +4,8 @@ SonicStage is a music studio that runs entirely in the browser. You pick sounds 
 
 Everything happens on the client. Sound is synthesized with the Web Audio API, the stage is rendered with Three.js, and the song generator composes locally, so there is no backend and no API key.
 
+This project was mostly for fun, and I wanted to give Cursor and Opus 5.5 and Gemini 4 Argon a try, so this is what I came up with.
+
 ## Features
 
 - **Two views of one song.** _Immersive_ is a full-screen stage with a sound browser and compact transport. _Pro_ adds the arrangement sheet, harmony controls, recording, and the effects rack. Switching views keeps your work.
