@@ -134,6 +134,15 @@ function applyPerformerEffect(effectId, index = appState.effectsSlotIndex) {
 function renderEffectsLibrary() {
     const palette = studioById('token-palette');
     if (!palette) return;
+    // The rack and collection scroll independently, especially in the mobile layout.
+    const scrollSelectors = ['.fx-rack', '.fx-chain', '.fx-browser', '.fx-cards', '.fx-filters'];
+    const scrollPositions = [
+        { selector: null, left: palette.scrollLeft, top: palette.scrollTop },
+        ...scrollSelectors.flatMap(selector => {
+            const element = palette.querySelector(selector);
+            return element ? [{ selector, left: element.scrollLeft, top: element.scrollTop }] : [];
+        }),
+    ];
     const focused = document.activeElement;
     const focusEffect = focused?.closest('[data-effect-id]')?.dataset.effectId;
     const focusAction = focused?.classList.contains('fx-power')
@@ -183,7 +192,7 @@ function renderEffectsLibrary() {
         appState.effectsScope = ['bar', 'master'].includes(select.value) ? select.value : 'player';
         if (appState.effectsScope === 'player') appState.effectsSlotIndex = Number(select.value);
         renderEffectsLibrary();
-        studioById('fx-performer').focus();
+        studioById('fx-performer').focus({ preventScroll: true });
     });
     if (arrange && !masterScope) {
         studioById('fx-bar-prev').addEventListener('click', () => {
@@ -295,6 +304,13 @@ function renderEffectsLibrary() {
         (target || select).focus({ preventScroll: true });
     } else if (focusCategory)
         palette.querySelector(`[data-fx-category="${focusCategory}"]`)?.focus({ preventScroll: true });
+    scrollPositions.forEach(({ selector, left, top }) => {
+        const element = selector ? palette.querySelector(selector) : palette;
+        if (element) {
+            element.scrollLeft = left;
+            element.scrollTop = top;
+        }
+    });
 }
 
 let highlightedEffectDrop = null;
@@ -462,55 +478,11 @@ function startEffectDrag(definition, x, y) {
 }
 
 function bindEffectDrag(card, definition) {
-    let press = null;
-    let timer;
-    let dragged = false;
-    const cancel = () => {
-        clearTimeout(timer);
-        press = null;
-        window.removeEventListener('pointermove', move);
-        window.removeEventListener('pointerup', cancel);
-        window.removeEventListener('pointercancel', cancel);
-        window.removeEventListener('blur', cancel);
-    };
-    const begin = (x, y) => {
-        cancel();
-        dragged = true;
-        startEffectDrag(definition, x, y);
-    };
-    // Follow the press outside the card too, so a quick drag cannot outrun its bounds.
-    const move = event => {
-        if (!press || event.pointerId !== press.id) return;
-        const dx = event.clientX - press.x,
-            dy = event.clientY - press.y;
-        if ((!press.touch && Math.hypot(dx, dy) > 5) || (press.touch && dy < -12 && Math.abs(dy) > Math.abs(dx) * 1.3))
-            begin(event.clientX, event.clientY);
-        else if (press.touch && Math.hypot(dx, dy) > 10) cancel();
-    };
-    card.addEventListener('pointerdown', event => {
-        if (event.button !== 0) return;
-        dragged = false;
-        press = { id: event.pointerId, x: event.clientX, y: event.clientY, touch: event.pointerType !== 'mouse' };
-        window.addEventListener('pointermove', move);
-        window.addEventListener('pointerup', cancel);
-        window.addEventListener('pointercancel', cancel);
-        window.addEventListener('blur', cancel);
-        timer = setTimeout(() => press && begin(press.x, press.y), press.touch ? 320 : 170);
-    });
-    card.addEventListener(
-        'touchmove',
-        event => {
-            if (dragged && appState.draggedEffectId) event.preventDefault();
-        },
-        { passive: false },
+    bindLibraryCardDrag(
+        card,
+        (x, y) => startEffectDrag(definition, x, y),
+        () => applyLibraryEffect(definition.id),
     );
-    card.addEventListener('contextmenu', event => {
-        if (press || dragged) event.preventDefault();
-    });
-    card.addEventListener('click', event => {
-        cancel();
-        if (!dragged || event.detail === 0) applyLibraryEffect(definition.id);
-    });
 }
 
 function initPerformerEffectsUI() {

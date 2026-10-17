@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "python3 scripts/dev-server.py",
     "build": "tailwindcss --config tailwind.config.cjs --input src/tailwind.css --output public/css/tailwind.css --minify",
-    "test": "node tests/song-generator.test.cjs && node tests/workspace.test.cjs && node tests/ui-motion.test.cjs && node tests/effects.test.cjs && node tests/arrangement-effects.test.cjs && node tests/arrangement-performance.test.cjs",
+    "test": "node tests/song-generator.test.cjs && node tests/workspace.test.cjs && node tests/ui-motion.test.cjs && node tests/effects.test.cjs && node tests/pro-fx.test.cjs && node tests/arrangement-effects.test.cjs && node tests/arrangement-performance.test.cjs",
     "format": "prettier --write \"public/**/*.{html,css,js}\" \"tests/**/*.cjs\" \"*.{cjs,json,md}\" --ignore-path .prettierignore",
     "format:check": "prettier --check \"public/**/*.{html,css,js}\" \"tests/**/*.cjs\" \"*.{cjs,json,md}\" --ignore-path .prettierignore"
   },

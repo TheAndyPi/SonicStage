@@ -284,7 +284,8 @@ context.removeEventListener = (type, callback) => {
     if (windowListeners.get(type) === callback) windowListeners.delete(type);
 };
 context.clearTimeout = () => {};
-context.testCard = { addEventListener: (type, callback) => cardListeners.set(type, callback) };
+context.testCard = { isConnected: true, addEventListener: (type, callback) => cardListeners.set(type, callback) };
+vm.runInContext(readPublic('js/ui/sequencer.js'), context);
 vm.runInContext(readPublic('js/ui/effects.js'), context);
 run(`var dragStarted = null;
     startEffectDrag = (definition, x, y) => dragStarted = { id: definition.id, x, y };

@@ -48,10 +48,74 @@ function setBeatBarSize(sizeKey, customPxHeight = null) {
         .forEach(btn => btn.setAttribute('aria-pressed', btn.dataset.size === sizeKey));
 }
 
+// Mouse dragging follows movement; touch dragging requires a deliberate stationary hold.
+// Track the whole press on window so releasing outside a card always cancels its timer.
+function bindLibraryCardDrag(card, startDrag, activate, canDrag = () => true) {
+    let press = null;
+    let timer;
+    let dragged = false;
+    let scrolled = false;
+    const cancel = () => {
+        clearTimeout(timer);
+        press = null;
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', release);
+        window.removeEventListener('pointercancel', cancel);
+        window.removeEventListener('blur', cancel);
+    };
+    const release = event => {
+        if (press && event.pointerId === press.id) cancel();
+    };
+    const begin = (x, y) => {
+        cancel();
+        if (!card.isConnected) return;
+        dragged = true;
+        startDrag(x, y);
+    };
+    const move = event => {
+        if (!press || event.pointerId !== press.id) return;
+        const distance = Math.hypot(event.clientX - press.x, event.clientY - press.y);
+        if (!press.touch && distance > 5) begin(event.clientX, event.clientY);
+        else if (press.touch && distance > 10) {
+            scrolled = true;
+            cancel();
+        }
+    };
+    card.addEventListener('pointerdown', event => {
+        if (event.button !== 0 || event.isPrimary === false) return;
+        cancel();
+        dragged = false;
+        scrolled = false;
+        if (!canDrag(event)) return;
+        press = { id: event.pointerId, x: event.clientX, y: event.clientY, touch: event.pointerType !== 'mouse' };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', release);
+        window.addEventListener('pointercancel', cancel);
+        window.addEventListener('blur', cancel);
+        if (press.touch) timer = setTimeout(() => press && begin(press.x, press.y), 500);
+    });
+    card.addEventListener(
+        'touchmove',
+        event => {
+            if (dragged && (appState.draggedPresetId || appState.draggedEffectId)) event.preventDefault();
+        },
+        { passive: false },
+    );
+    card.addEventListener('contextmenu', event => {
+        if (press || dragged) event.preventDefault();
+    });
+    card.addEventListener('click', event => {
+        cancel();
+        if (event.detail === 0 || (!dragged && !scrolled && !appState.draggedPresetId && !appState.draggedEffectId))
+            activate(event);
+    });
+}
+
 function renderTokenPalette() {
     if (appState.libraryTab === 'effects') return renderEffectsLibrary();
     const palette = document.getElementById('token-palette');
     if (!palette) return;
+    const { scrollLeft, scrollTop } = palette;
     palette.innerHTML = '';
 
     const query = (document.getElementById('sound-search')?.value || '').trim().toLowerCase();
@@ -79,72 +143,21 @@ function renderTokenPalette() {
                 : '<span class="sound-add" aria-hidden="true">+</span>'
         }`;
 
-        let pressTimer = null;
-        let startedDrag = false;
-        let touchPress = null;
-        const beginDrag = (x, y) => {
-            clearTimeout(pressTimer);
-            touchPress = null;
-            startedDrag = true;
-            startTokenDrag(preset, x, y);
-        };
-
-        card.addEventListener('pointerdown', e => {
-            startedDrag = false;
-            touchPress = null;
-            if (e.button !== 0 || e.target.closest('.sound-stepper')) return;
-            if (e.pointerType === 'mouse') {
-                pressTimer = setTimeout(() => beginDrag(e.clientX, e.clientY), 170);
-                return;
-            }
-            // Touch lifts a sound with a long press, or a swipe up toward the stage.
-            touchPress = { x: e.clientX, y: e.clientY, lastX: e.clientX, lastY: e.clientY };
-            pressTimer = setTimeout(() => touchPress && beginDrag(touchPress.lastX, touchPress.lastY), 320);
-        });
-
-        card.addEventListener('pointermove', e => {
-            if (!touchPress) return;
-            touchPress.lastX = e.clientX;
-            touchPress.lastY = e.clientY;
-            const dx = e.clientX - touchPress.x;
-            const dy = e.clientY - touchPress.y;
-            if (dy < -12 && Math.abs(dy) > Math.abs(dx) * 1.3) beginDrag(e.clientX, e.clientY);
-            else if (Math.hypot(dx, dy) > 10) {
-                clearTimeout(pressTimer);
-                touchPress = null;
-            }
-        });
-
-        // Once a sound is lifted, the finger moves the sound instead of scrolling the list.
-        card.addEventListener(
-            'touchmove',
-            e => {
-                if (startedDrag && appState.draggedPresetId) e.preventDefault();
+        bindLibraryCardDrag(
+            card,
+            (x, y) => startTokenDrag(preset, x, y),
+            event => {
+                const action = event.target.closest('[data-sound-action]')?.dataset.soundAction;
+                if (action === 'remove') removePresetPlayer(preset.id);
+                else if (action === 'add' || !isActive) assignPresetToSlot(preset.id);
             },
-            { passive: false },
+            event => !event.target.closest('.sound-stepper'),
         );
-        card.addEventListener('contextmenu', e => {
-            if (touchPress || startedDrag) e.preventDefault();
-        });
-
-        card.addEventListener('click', e => {
-            clearTimeout(pressTimer);
-            if (startedDrag || appState.draggedPresetId) return;
-            const action = e.target.closest('[data-sound-action]')?.dataset.soundAction;
-            if (action === 'remove') removePresetPlayer(preset.id);
-            else if (action === 'add' || !isActive) assignPresetToSlot(preset.id);
-        });
-
-        card.addEventListener('pointercancel', () => {
-            clearTimeout(pressTimer);
-            touchPress = null;
-        });
-        card.addEventListener('pointerleave', e => {
-            if (e.pointerType === 'mouse') clearTimeout(pressTimer);
-        });
 
         palette.appendChild(card);
     });
+    palette.scrollLeft = scrollLeft;
+    palette.scrollTop = scrollTop;
 }
 
 function startTokenDrag(preset, clientX, clientY) {

@@ -48,6 +48,7 @@ function startCinematic() {
             far: camera.far,
             fogDensity: scene.fog?.density,
             controlsEnabled: controls.enabled,
+            scopeWindowOpen: masterScope.windowOpen,
         };
         stopSong();
         cinematicState.active = true;
@@ -99,6 +100,7 @@ function exitCinematic() {
     document.body.classList.remove('cinematic-mode');
     document.getElementById('cinematic-overlay').hidden = true;
     setSongView(saved.view);
+    setScopeWindowOpen(saved.scopeWindowOpen);
     document.getElementById(saved.view === 'song' ? 'song-showcase' : 'btn-cinematic').focus({ preventScroll: true });
 }
 

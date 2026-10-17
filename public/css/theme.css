@@ -205,6 +205,10 @@ body.experience-transition #bottom-dock {
 body.experience-transition #stage-toolbar {
     view-transition-name: studio-camera;
 }
+/* Crossfade the camera bar at its natural size instead of scaling its two layouts. */
+body.experience-transition.immersive-mode #stage-toolbar {
+    view-transition-name: immersive-camera;
+}
 body.experience-transition #immersive-heading {
     view-transition-name: studio-heading;
 }
@@ -426,6 +430,33 @@ body.beats-collapsed #bottom-dock {
 }
 #library-resize-handle {
     bottom: var(--beat-space);
+    display: grid;
+    place-items: center;
+}
+#library-resize-handle::after {
+    content: '';
+    width: 3px;
+    height: 42px;
+    border-radius: 2px;
+    background: var(--surface-strong);
+    pointer-events: none;
+}
+#library-resize-handle:hover,
+#library-resize-handle:focus-visible,
+#library-resize-handle:active {
+    background: transparent;
+}
+#library-resize-handle:hover::after,
+#library-resize-handle:focus-visible::after,
+#library-resize-handle:active::after {
+    background: var(--purple);
+}
+#library-resize-handle[aria-orientation='horizontal']::after {
+    width: 42px;
+    height: 3px;
+}
+body.immersive-mode #library-resize-handle::after {
+    background: var(--purple);
 }
 body.sounds-collapsed #library-resize-handle {
     visibility: hidden;
@@ -552,7 +583,7 @@ body.sounds-collapsed #library-resize-handle {
     -webkit-touch-callout: none;
     -webkit-user-select: none;
 }
-/* Horizontal sound strips scroll sideways; a vertical swipe lifts the sound onto the stage. */
+/* Horizontal strips scroll immediately; hold a card still to lift it onto the stage. */
 body.immersive-mode .studio-token {
     touch-action: pan-x;
 }
@@ -1283,7 +1314,7 @@ body.is-dragging-measure * {
     flex-shrink: 0;
     vertical-align: -0.12em;
 }
-#btn-cinematic .desktop-label {
+#btn-cinematic .showcase-label {
     margin-left: 5px;
 }
 .transport-controls #transport-restart svg {
@@ -1356,7 +1387,6 @@ body.immersive-mode #btn-record-toggle,
 body.immersive-mode .harmony-control,
 body.immersive-mode .workspace-switch,
 body.immersive-mode #btn-pro-fx,
-body.immersive-mode #btn-cinematic,
 body.immersive-mode .output-meter,
 body.immersive-mode #bpm-slider {
     display: none !important;
@@ -1531,8 +1561,8 @@ body.immersive-mode .sound-stepper button {
 body.immersive-mode #library-resize-handle {
     position: fixed;
     top: auto;
-    bottom: calc(88px + var(--immersive-sound-height));
-    height: 9px;
+    bottom: calc(87px + var(--immersive-sound-height));
+    height: 10px;
     left: 40px;
     right: 40px;
     width: auto;
@@ -1717,8 +1747,8 @@ body.cinematic-mode #canvas-container {
     .project-bar {
         display: grid;
         grid-template-columns: minmax(0, 1fr) 154px 32px;
-        grid-template-rows: 42px 29px;
-        height: 90px;
+        grid-template-rows: 42px 18px 28px;
+        height: 112px;
         gap: 4px 8px;
         padding: 6px 12px;
         align-content: center;
@@ -1750,7 +1780,7 @@ body.cinematic-mode #canvas-container {
         height: 32px;
     }
     .project-name {
-        grid-column: 1;
+        grid-column: 1/-1;
         grid-row: 2;
         margin: 0;
         padding-right: 12px;
@@ -1760,9 +1790,10 @@ body.cinematic-mode #canvas-container {
         font-size: 11px;
     }
     .project-actions {
-        grid-column: 2/4;
-        grid-row: 2;
-        justify-self: end;
+        grid-column: 1/-1;
+        grid-row: 3;
+        justify-self: stretch;
+        justify-content: space-between;
         gap: 2px;
     }
     .project-actions > .quiet-button {
@@ -1878,7 +1909,10 @@ body.cinematic-mode #canvas-container {
         transform: translateY(110%);
     }
     #library-resize-handle {
-        bottom: calc(var(--beat-space) + var(--sound-height) - 4px);
+        left: 0;
+        width: 100%;
+        height: 10px;
+        bottom: calc(var(--beat-space) + var(--sound-height) - 5px);
     }
     #canvas-container,
     #pedestal-hud-layer {
@@ -1957,7 +1991,7 @@ body.cinematic-mode #canvas-container {
         border-radius: 17px;
     }
     body.immersive-mode .project-bar {
-        height: 90px;
+        height: 112px;
         padding: 6px 12px;
         gap: 4px 8px;
     }
@@ -2095,7 +2129,8 @@ body.cinematic-mode #canvas-container {
         font-size: 10px;
     }
     body.immersive-mode #library-resize-handle {
-        bottom: calc(78px + var(--immersive-sound-height));
+        bottom: calc(77px + var(--immersive-sound-height));
+        height: 10px;
         left: 25px;
         right: 25px;
     }

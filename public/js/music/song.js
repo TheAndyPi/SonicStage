@@ -331,8 +331,8 @@ function applySongDocument(data) {
     applyMeterLayout();
     document.getElementById('key-select').value = data.rootKey;
     document.getElementById('scale-select').value = data.scaleMode;
-    document.getElementById('fx-global-swing').value = (data.globalSwing / 0.55) * 100;
-    document.getElementById('fx-global-swing-val').textContent = `${Math.round((data.globalSwing / 0.55) * 100)}%`;
+    document.getElementById('fx-global-swing').value = data.globalSwing * 100;
+    document.getElementById('fx-global-swing-val').textContent = `${Math.round(data.globalSwing * 100)}%`;
     const subtitle = document.getElementById('subtitle-key-info');
     subtitle.textContent = `${KEY_NAMES[data.rootKey]} ${SCALE_DEFINITIONS[data.scaleMode].label}`;
 }

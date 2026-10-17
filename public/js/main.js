@@ -247,7 +247,7 @@ window.onload = function () {
         'fx-global-swing-val',
         v => `${v}%`,
         v => {
-            appState.globalSwing = (v / 100) * 0.55;
+            appState.globalSwing = v / 100;
             songChanged();
         },
     );

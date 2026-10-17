@@ -403,7 +403,7 @@ function bindStudioResize(handle, kind) {
     const apply = kind === 'beats' ? setStudioBeatHeight : setStudioLibrarySize;
     handle.setAttribute('role', 'separator');
     handle.tabIndex = 0;
-    handle.setAttribute('aria-label', kind === 'beats' ? 'Resize beat editor' : 'Resize sound browser');
+    handle.setAttribute('aria-label', kind === 'beats' ? 'Resize beat editor' : 'Resize sounds and effects browser');
     handle.setAttribute('aria-orientation', kind === 'beats' || mobile() ? 'horizontal' : 'vertical');
     handle.setAttribute('aria-valuemin', kind === 'beats' ? '155' : mobile() ? '100' : '190');
     handle.setAttribute('aria-valuemax', kind === 'beats' ? window.innerHeight - 210 : mobile() ? '260' : '420');
@@ -552,7 +552,7 @@ function initStudio() {
     document.body.appendChild(tray);
     const separator = document.createElement('div');
     separator.id = 'library-resize-handle';
-    separator.title = 'Drag to resize sounds · Double-click to reset';
+    separator.title = 'Drag to resize sounds and effects · Double-click to reset';
     document.body.append(separator);
     const beatActions = document.createElement('div');
     beatActions.className = 'beat-context-actions';

@@ -76,6 +76,45 @@
                 }
                 results.textContent +=
                     '\nPASS Five four-effect chains render finite output.\nPASS All 21 effects verified in OfflineAudioContext.';
+                // Quiet sources used to remain below the master drive's clipping
+                // knee at every setting. Check actual harmonics in a real WaveShaper.
+                const driveHarmonics = [];
+                for (const amount of [0, 12, 50, 100]) {
+                    const ctx = new OfflineAudioContext(1, 24000, 24000);
+                    const engine = new StudioAudioEngine();
+                    const source = ctx.createOscillator();
+                    source.frequency.value = 200;
+                    const level = ctx.createGain();
+                    level.gain.value = 0.05; // 0.1 signal, fed to drive at half level.
+                    const drive = ctx.createWaveShaper();
+                    drive.curve = engine.makeDistortionCurve(12);
+                    drive.curve = engine.makeDistortionCurve(amount);
+                    drive.oversample = '2x';
+                    source.connect(level).connect(drive).connect(ctx.destination);
+                    source.start();
+                    const samples = (await ctx.startRendering()).getChannelData(0);
+                    let fundamental = 0,
+                        fundamentalCos = 0,
+                        third = 0,
+                        thirdCos = 0;
+                    for (let i = 2400; i < samples.length; i++) {
+                        if (!Number.isFinite(samples[i])) throw Error('Drive: nonfinite sample');
+                        const phase = (i / 24000) * Math.PI * 2 * 200;
+                        fundamental += samples[i] * Math.sin(phase);
+                        fundamentalCos += samples[i] * Math.cos(phase);
+                        third += samples[i] * Math.sin(phase * 3);
+                        thirdCos += samples[i] * Math.cos(phase * 3);
+                    }
+                    driveHarmonics.push(Math.hypot(third, thirdCos) / Math.hypot(fundamental, fundamentalCos));
+                }
+                if (
+                    driveHarmonics[0] > 0.0001 ||
+                    driveHarmonics[3] < 0.1 ||
+                    !driveHarmonics.every((ratio, index) => index === 0 || ratio > driveHarmonics[index - 1])
+                )
+                    throw Error('Drive: expected clean zero and increasing quiet-signal harmonics: ' + driveHarmonics);
+                results.textContent +=
+                    '\nPASS Master drive: clean at 0%, increasing quiet-signal harmonics at 12%, 50%, and 100%.';
                 document.title = 'PASS · Performer effects audio verification';
             })().catch(error => {
                 results.textContent += '\nFAIL ' + error.stack;

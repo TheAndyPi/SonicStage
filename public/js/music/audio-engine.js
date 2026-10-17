@@ -63,8 +63,8 @@ class StudioAudioEngine {
         this.compressor.attack.setValueAtTime(0.008, this.ctx.currentTime);
         this.compressor.release.setValueAtTime(0.18, this.ctx.currentTime);
 
-        // 2. Analog Tape Saturation Drive (WaveShaper). A WaveShaper flattens
-        // anything outside ±1, so it is fed at half level and its curve spans ±2.
+        // 2. Analog Tape Saturation Drive (WaveShaper). Feed at half level so
+        // the curve can handle signals up to ±2 without clipping at its edges.
         const driveInput = this.ctx.createGain();
         driveInput.gain.setValueAtTime(0.5, this.ctx.currentTime);
         this.driveNode = this.ctx.createWaveShaper();
@@ -125,7 +125,7 @@ class StudioAudioEngine {
         this.reverbNode = this.ctx.createConvolver();
         this.reverbNode.buffer = this.createImpulseResponse(1.8, 2.7);
         this.reverbSend = this.ctx.createGain();
-        this.reverbSend.gain.setValueAtTime(0.26, this.ctx.currentTime);
+        this.reverbSend.gain.setValueAtTime(0.26 * 0.9, this.ctx.currentTime);
 
         // 7. BPM-Synced Stereo Ping-Pong Delay
         this.delayNodeL = this.ctx.createDelay(2.0);
@@ -246,7 +246,16 @@ class StudioAudioEngine {
 
     makeDistortionCurve(amount = 12) {
         const drive = Math.max(0, Math.min(100, Number(amount) || 0)) / 100;
-        return this.makeSaturationCurve(0.9 - drive * 0.7);
+        // Saturate across the whole signal, including quiet instruments. Moving
+        // only a clipping knee left ordinary mix levels completely unchanged.
+        const strength = Math.pow(10, (drive * 24) / 20) - 1;
+        const normalization = Math.tanh(strength);
+        const curve = new Float32Array(4096);
+        for (let i = 0; i < curve.length; i++) {
+            const x = ((i * 2) / (curve.length - 1) - 1) * 2;
+            curve[i] = strength === 0 ? x : Math.tanh(strength * x) / normalization;
+        }
+        return curve;
     }
 
     // Spread the summed level of every audible player so a full stage

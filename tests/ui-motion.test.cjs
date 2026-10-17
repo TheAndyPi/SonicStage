@@ -76,6 +76,155 @@ assert.equal(scopeWindow.hidden, true);
 assert.equal(animations.length, animatedCount, 'reduced motion changes visibility immediately');
 assert.match(productionFunction('js/stage/camera.js', 'startCinematic'), /setScopeWindowOpen\(false\)/);
 
+// Showcase remembers the open state once, including when replaying before exit.
+const vector = { clone: () => ({}), copy() {} };
+Object.assign(scopeContext, {
+    songState: { ready: true, view: 'song', audition: true },
+    camera: { position: vector, fov: 40, far: 120, updateProjectionMatrix() {} },
+    controls: { enabled: true, target: vector, update() {} },
+    scene: { fog: { density: 0.1 } },
+    audioEngine: { init() {}, ctx: { state: 'running' } },
+    document: {
+        body: { classList: { add() {}, remove() {} } },
+        getElementById: () => ({ focus() {}, hidden: true }),
+    },
+    stopSong() {},
+    resetSongTransport() {},
+    syncStageToMeasure() {},
+    setCinematicShot() {},
+    updateCinematicUI() {},
+    setSongView(view) {
+        scopeContext.songState.view = view;
+    },
+});
+scopeContext.cinematicState.visits = new Set();
+for (const name of ['startCinematic', 'exitCinematic'])
+    vm.runInContext(productionFunction('js/stage/camera.js', name), scopeContext);
+for (const initiallyOpen of [true, false]) {
+    scopeContext.setScopeWindowOpen(initiallyOpen);
+    scopeContext.startCinematic();
+    assert.equal(scopeState.windowOpen, false, 'showcase closes the visualizer');
+    scopeContext.startCinematic();
+    scopeContext.exitCinematic();
+    assert.equal(scopeState.windowOpen, initiallyOpen, 'exit restores the prior visualizer state after replay');
+    assert.equal(scopeContext.songState.view, 'song');
+    assert.equal(scopeContext.songState.audition, true);
+}
+
+// Both card types share tap, scroll, hold, and mouse-drag behavior.
+function gestureHarness(effect) {
+    const listeners = new Map();
+    const timers = new Map();
+    const cardListeners = new Map();
+    let time = 0,
+        nextId = 0,
+        drags = 0,
+        clicks = 0;
+    const card = { isConnected: true, addEventListener: (type, callback) => cardListeners.set(type, callback) };
+    const context = vm.createContext({
+        appState: {},
+        window: {
+            addEventListener: (type, callback) => listeners.set(type, callback),
+            removeEventListener: (type, callback) => {
+                if (listeners.get(type) === callback) listeners.delete(type);
+            },
+        },
+        setTimeout: (callback, delay) => {
+            const id = ++nextId;
+            timers.set(id, { callback, at: time + delay });
+            return id;
+        },
+        clearTimeout: id => timers.delete(id),
+        card,
+        startDrag: () => drags++,
+        activate: () => clicks++,
+        startEffectDrag: () => drags++,
+        applyLibraryEffect: () => clicks++,
+    });
+    vm.runInContext(productionFunction('js/ui/sequencer.js', 'bindLibraryCardDrag'), context);
+    vm.runInContext(productionFunction('js/ui/effects.js', 'bindEffectDrag'), context);
+    vm.runInContext(
+        effect ? "bindEffectDrag(card, { id: 'echo' })" : 'bindLibraryCardDrag(card, startDrag, activate)',
+        context,
+    );
+    const event = { button: 0, pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 100, detail: 1 };
+    return {
+        card,
+        down: (overrides = {}) => cardListeners.get('pointerdown')({ ...event, ...overrides }),
+        click: (detail = 1) => cardListeners.get('click')({ ...event, detail }),
+        emit: (type, overrides = {}) => listeners.get(type)?.({ ...event, ...overrides }),
+        tick(ms) {
+            time += ms;
+            for (const [id, timer] of timers)
+                if (timer.at <= time) {
+                    timers.delete(id);
+                    timer.callback();
+                }
+        },
+        get drags() {
+            return drags;
+        },
+        get clicks() {
+            return clicks;
+        },
+        get pending() {
+            return timers.size + listeners.size;
+        },
+    };
+}
+for (const effect of [false, true]) {
+    const tap = gestureHarness(effect);
+    tap.down();
+    tap.tick(80);
+    tap.emit('pointerup');
+    tap.click();
+    tap.tick(600);
+    assert.equal(tap.clicks, 1);
+    assert.equal(tap.drags, 0, 'a released tap never starts a delayed drag');
+    assert.equal(tap.pending, 0);
+    for (const end of ['pointerup', 'pointercancel', 'blur']) {
+        const canceled = gestureHarness(effect);
+        canceled.down();
+        canceled.emit(end);
+        canceled.tick(600);
+        assert.equal(canceled.drags, 0, `${end} cancels a press outside the card`);
+        assert.equal(canceled.pending, 0);
+    }
+    for (const move of [{ clientX: 140 }, { clientY: 70 }]) {
+        const scroll = gestureHarness(effect);
+        scroll.down();
+        scroll.tick(100);
+        scroll.emit('pointermove', move);
+        scroll.tick(600);
+        scroll.click();
+        assert.equal(scroll.drags, 0, 'swipes scroll rather than lift cards');
+        assert.equal(scroll.clicks, 0, 'a swipe does not activate a card');
+    }
+    const hold = gestureHarness(effect);
+    hold.down();
+    hold.emit('pointermove', { clientX: 104, clientY: 97 });
+    hold.tick(499);
+    assert.equal(hold.drags, 0);
+    hold.tick(1);
+    assert.equal(hold.drags, 1, 'a deliberate stationary hold lifts a card');
+    hold.click();
+    assert.equal(hold.clicks, 0, 'dropping cannot also activate a card');
+    hold.click(0);
+    assert.equal(hold.clicks, 1, 'keyboard activation remains available');
+    const mouse = gestureHarness(effect);
+    mouse.down({ pointerType: 'mouse' });
+    mouse.tick(600);
+    assert.equal(mouse.drags, 0, 'holding the mouse still does not steal a click');
+    mouse.emit('pointermove', { clientX: 200, clientY: 300 });
+    assert.equal(mouse.drags, 1, 'fast mouse drags are tracked beyond card bounds');
+    assert.equal(mouse.pending, 0);
+    const removed = gestureHarness(effect);
+    removed.down();
+    removed.card.isConnected = false;
+    removed.tick(600);
+    assert.equal(removed.drags, 0, 'a library rebuild cannot lift a detached card');
+}
+
 // Placement must keep the two panels separate at desktop, tablet, and phone widths.
 const rackClasses = new Set();
 const rackStyle = new Map();
@@ -185,5 +334,5 @@ experienceContext.setStudioExperience('immersive');
 assert.equal(experienceContext.studioExperience, 'immersive', 'older browsers still change modes');
 
 console.log(
-    'Passed: scope animation interruption, showcase dismissal, responsive FX rack placement, mode transition races, reduced motion, and browser fallback.',
+    'Passed: scope animation interruption, showcase restoration, sound/effect tap and drag gestures, responsive FX rack placement, mode transition races, reduced motion, and browser fallback.',
 );
