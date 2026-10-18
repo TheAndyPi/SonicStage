@@ -55,6 +55,10 @@ Some other things worth knowing:
 
 SonicStage needs a browser with WebGL and Web Audio, which covers all current desktop and mobile browsers.
 
+## Creating song files
+
+See [the song file guide](SONG_FILE_GUIDE.md) for the JSON format, instrument event shapes, pitch mapping, a complete example, and instructions for creating, validating, and importing songs.
+
 ## Project structure
 
 ```text

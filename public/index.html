@@ -134,27 +134,45 @@
                     </button>
                     <span class="toolbar-divider"></span>
                     <button id="project-new" class="quiet-button desktop-action">New</button
-                    ><button id="project-open" class="quiet-button">Open</button
-                    ><button id="project-save" class="quiet-button" title="Save song file (⌘S)">
-                        Save <span class="desktop-label">song</span>
+                    ><button id="project-open" class="quiet-button" title="Open song file" aria-label="Open song file">
+                        <svg
+                            class="project-action-icon"
+                            viewBox="0 0 20 20"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.5"
+                            aria-hidden="true"
+                        >
+                            <path d="M2.5 5.5h6l2 2h7v9h-15z" stroke-linejoin="round" />
+                        </svg>
+                        <span class="project-action-label">Open</span></button
+                    ><button
+                        id="project-save"
+                        class="quiet-button"
+                        title="Save song file (⌘S)"
+                        aria-label="Save song file"
+                    >
+                        <svg
+                            class="project-action-icon"
+                            viewBox="0 0 20 20"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.5"
+                            aria-hidden="true"
+                        >
+                            <path d="M3 3h11l3 3v11H3zM6 3v5h7V3M6 17v-6h8v6" stroke-linejoin="round" />
+                        </svg>
+                        <span class="project-action-label">Save <span class="desktop-label">song</span></span>
                     </button>
-                    <button id="btn-cinematic" class="quiet-button" title="Watch song with directed cameras">
+                    <button
+                        id="btn-cinematic"
+                        class="accent-button"
+                        title="Watch song with directed cameras"
+                        aria-label="Showcase"
+                    >
                         <svg class="inline-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                             <path d="M4.5 3v10l8.5-5Z" /></svg
                         ><span class="showcase-label">Showcase</span>
-                    </button>
-                    <button id="project-generate" class="accent-button">
-                        <svg
-                            class="inline-icon"
-                            viewBox="0 0 16 16"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.6"
-                            aria-hidden="true"
-                        >
-                            <path d="M8 2.5v11M2.5 8h11M4.1 4.1l7.8 7.8m0-7.8-7.8 7.8" stroke-linecap="round" />
-                        </svg>
-                        Generate
                     </button>
                 </div>
             </div>
@@ -909,7 +927,7 @@
                                     d="M8 2.5v11M2.5 8h11M4.1 4.1l7.8 7.8m0-7.8-7.8 7.8"
                                     stroke-linecap="round"
                                 /></svg></span
-                        ><span><strong>Generate</strong><small>A finished arrangement</small></span>
+                        ><span><strong>Load Example</strong><small>Explore a sample song</small></span>
                     </button>
                 </div>
                 <div class="recent-session" id="recent-session" hidden>
@@ -928,12 +946,14 @@
             <form id="generator-form">
                 <div class="dialog-heading">
                     <div>
-                        <span class="eyebrow">COMPOSITION</span>
-                        <h2>Find your next idea.</h2>
+                        <span class="eyebrow">EXAMPLE SONGS</span>
+                        <h2>Load an example.</h2>
                     </div>
-                    <button type="button" class="icon-button" data-close-dialog aria-label="Close generator">×</button>
+                    <button type="button" class="icon-button" data-close-dialog aria-label="Close examples">×</button>
                 </div>
-                <p class="dialog-copy">A complete arrangement, ready to make your own.</p>
+                <p class="dialog-copy">
+                    Play a song preset, or choose a style, length, and energy for a sample arrangement.
+                </p>
                 <div class="field-label" id="generator-style-label">Style</div>
                 <div
                     class="style-options"
@@ -944,6 +964,7 @@
                 <div class="generator-fields">
                     <label
                         >Length<select id="generator-bars">
+                            <option value="49" hidden>49 bars · original score</option>
                             <option value="8">8 bars · sketch</option>
                             <option value="16" selected>16 bars · short song</option>
                             <option value="32">32 bars · full song</option>
@@ -951,15 +972,16 @@
                         </select></label
                     ><label
                         >Energy<select id="generator-energy">
+                            <option value="original" hidden>Original arrangement</option>
                             <option value="low">Low</option>
                             <option value="medium" selected>Medium</option>
                             <option value="high">High</option>
                         </select></label
                     >
                 </div>
-                <div class="generator-note">Composed locally · No account needed</div>
+                <div class="generator-note">Explore, play, and make it your own · No account needed</div>
                 <p id="generator-error" role="alert" hidden></p>
-                <button type="submit" id="generator-submit" class="accent-button">Generate song</button>
+                <button type="submit" id="generator-submit" class="accent-button">Load Example</button>
             </form>
         </dialog>
         <dialog id="shortcuts-dialog" class="studio-dialog">

@@ -622,7 +622,7 @@ function renderSongArrangement(rebuild = true) {
         html += '</tr>';
     });
     if (!rows.length)
-        html += `<tr><td colspan="${measures.length + 1}" class="text-slate-400 p-6"><p style="padding:24px">Add a sound or generate a song to start.</p></td></tr>`;
+        html += `<tr><td colspan="${measures.length + 1}" class="text-slate-400 p-6"><p style="padding:24px">Add a sound to start, or load an example from the start page.</p></td></tr>`;
     const sheet = document.getElementById('song-sheet');
     sheet.innerHTML = html + '</tbody>';
     songSheetDOM.columns = [];

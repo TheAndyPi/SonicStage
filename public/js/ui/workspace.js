@@ -167,6 +167,29 @@ function openRecentProject(id) {
         showStageToast(error instanceof SyntaxError ? 'Unable to read this song.' : error.message, '#f43f5e');
     }
 }
+const KEYBOARD_SCORE_STYLE = { id: 'keyboard-score', name: 'Piano Keyboard Score', blurb: 'Full band · 128 BPM' };
+async function loadExampleDocument(style, bars, energy) {
+    if (style !== KEYBOARD_SCORE_STYLE.id) return generateSong({ style, bars, energy });
+    const response = await fetch('songs/keyboard-score-piano.json');
+    if (!response.ok) throw new Error('Could not load the keyboard score. Please try again.');
+    return response.json();
+}
+function updateExampleOptions() {
+    const fixed =
+        studioById('generator-form').querySelector('input[name="style"]:checked')?.value === KEYBOARD_SCORE_STYLE.id;
+    for (const [id, value] of [
+        ['generator-bars', '49'],
+        ['generator-energy', 'original'],
+    ]) {
+        const select = studioById(id);
+        if (fixed && !select.disabled) select.dataset.previousValue = select.value;
+        select.querySelector(`option[value="${value}"]`).hidden = !fixed;
+        if (fixed) select.value = value;
+        else if (select.disabled)
+            select.value = select.dataset.previousValue || (id === 'generator-bars' ? '16' : 'medium');
+        select.disabled = fixed;
+    }
+}
 function setWorkspaceInert(inert) {
     [
         'transport-header',
@@ -583,7 +606,6 @@ function initStudio() {
     studioById('project-open').addEventListener('click', () => studioById('song-file').click());
     studioById('start-open').addEventListener('click', () => studioById('song-file').click());
     studioById('project-save').addEventListener('click', () => studioById('song-export').click());
-    studioById('project-generate').addEventListener('click', openGenerator);
     studioById('start-generate').addEventListener('click', openGenerator);
     studioById('studio-home').addEventListener('click', showStudioHome);
     studioById('transport-restart').addEventListener('click', () => playSongFrom(0));
@@ -642,38 +664,42 @@ function initStudio() {
         studioById('sound-search').focus();
     });
     studioById('generator-styles').replaceChildren(
-        ...[{ id: 'random', name: 'Surprise me', blurb: 'Any style, new every time' }, ...SONG_STYLES].map(
-            (style, index) => {
-                const label = document.createElement('label');
-                const input = Object.assign(document.createElement('input'), {
-                    type: 'radio',
-                    name: 'style',
-                    value: style.id,
-                    checked: index === 0,
-                });
-                const text = document.createElement('span');
-                const blurb = document.createElement('small');
-                blurb.textContent = style.blurb;
-                text.append(style.name, blurb);
-                label.append(input, text);
-                return label;
-            },
-        ),
+        ...[
+            { id: 'random', name: 'Surprise me', blurb: 'Explore any style' },
+            KEYBOARD_SCORE_STYLE,
+            ...SONG_STYLES,
+        ].map((style, index) => {
+            const label = document.createElement('label');
+            const input = Object.assign(document.createElement('input'), {
+                type: 'radio',
+                name: 'style',
+                value: style.id,
+                checked: index === 0,
+            });
+            const text = document.createElement('span');
+            const blurb = document.createElement('small');
+            blurb.textContent = style.blurb;
+            text.append(style.name, blurb);
+            label.append(input, text);
+            return label;
+        }),
     );
+    studioById('generator-styles').addEventListener('change', updateExampleOptions);
     studioById('generator-form').addEventListener('submit', async event => {
         event.preventDefault();
         const button = studioById('generator-submit');
         button.disabled = true;
-        button.textContent = 'Composing…';
+        button.textContent = 'Loading…';
         await new Promise(requestAnimationFrame);
         try {
             rememberRecentSong();
-            const data = generateSong({
-                style: new FormData(event.target).get('style'),
-                bars: Number(studioById('generator-bars').value),
-                energy: studioById('generator-energy').value,
-            });
-            const styleName = SONG_STYLES.find(style => style.id === data.style)?.name || 'Song';
+            const style = new FormData(event.target).get('style');
+            const data = await loadExampleDocument(
+                style,
+                Number(studioById('generator-bars').value),
+                studioById('generator-energy').value,
+            );
+            const styleName = [KEYBOARD_SCORE_STYLE, ...SONG_STYLES].find(item => item.id === style)?.name || 'Song';
             data.id = newProjectId();
             const valid = readSongDocument(data);
             checkpointSong();
@@ -688,11 +714,11 @@ function initStudio() {
             saveSongLocally();
             showStageToast(`${data.title} · ${styleName} · ${data.bpm} BPM`, '#b9c695');
         } catch (error) {
-            studioById('generator-error').textContent = error.message || 'Could not generate this song.';
+            studioById('generator-error').textContent = error.message || 'Could not load this example.';
             studioById('generator-error').hidden = false;
         } finally {
             button.disabled = false;
-            button.textContent = 'Generate song';
+            button.textContent = 'Load Example';
         }
     });
     // One history entry per command or fader gesture, including keyboard edits.

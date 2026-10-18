@@ -1,0 +1,48 @@
+[7Ir] I I T-S [QS] G
+[*GT] S S P P O [PW] O
+[(PY] O-[ET] I T [EI] I
+T [OT]-E [OT] E I (
+[7Ir] I I [OQT]--[rS] G
+[*GT] S S [GW] G S [GT] H
+[(HSY]-E I-E T-
+E [OT]-E [OT] E I (
+[7IrT] I I [QT] T S [rS] [GS]
+[*GST] S S-[PW] O [PT] O
+[(PY]--[EO] P-Y O
+O E Y I--E-
+[7IT] Q r T-S [rS] G
+[^EG] S [GS] [HS] [HS] E [^S]-
+[*T] W T O-[*T] W [IT]-
+[*T] W [OT]--[GI]-
+[7]-I [OrT] [OT]-[7] I
+[!*I] [OT] [OT] * [OT] W [!*I] I
+[(@ST]-[ST] [(ST] [ST] E [IT] [IT]-
+[@IT] ( [OT] [OT] ( [!IT]-
+[7]-7 Q r [IT] [IT] [IT]
+[^ST]-[ST] [^ST] [ST] E [IT] [IT]
+[%] Y-%-W [(I]-
+[%IS]-[IS] [IS] [%IS] W [(IT] [^]
+[7]-I [OrT] [OT]-[7] I
+[!*I] [OT] [OT] * [OT] W [!*I] I
+[(@ST]-[(ST] [ST] [EST] ( [IT] [DI]
+@ [IS] ( [IP] [!*IO]-[%I]O-
+[%I]-% ( W [Ir] [%Ir] [OT]
+[^IP]-^ I [EIY] ^ [IT] [^]
+[7]-[7T] Q W 7 Q 7
+W 7 [7Q]-[7QT] [7QT] [7] [QT]
+[7] Q [7QT] 7 [QT] [7QT] 7 [QT]
+[$] Q [$QT] Q [QT] [QT] $ [QT]
+[@] Q [@QT] ( [QT] [QT] [(@QT] [QY]
+[!QY] % [QT] * Q [QT] [!*] [QT]
+[7] Q [7IQT] 7 [IQT] [7IQT] 7 [IQT]
+[$] Q [$IQT] Q [IQT] [IQT] $ [IQT]
+[@] Q [@IQT] ( [IQT] [IQT] [(@IQT] [OWY]
+[!OWY] % [QT] * [IP] S [!*IP] O
+[7IO]-$ [7IO]-$ [7IT]-
+[$]-$ * [PQT] [OT] [$OQT] [IT]
+[(@OT]-^ [(@OT]-^ [(@OT]-
+[!*]-I I [!*IP] S [!*IP] O
+[7IO] $ [7IO]-I-[7] [IT]
+[$] T [$IT] * Q [IT] [$Q] [IT]
+[(@] T [^IT] ( T [IT] [(@] [IT]
+[!*] T [IT] % * T I O
